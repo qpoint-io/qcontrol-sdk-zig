@@ -21,6 +21,16 @@ extern "C" {
 #endif
 
 /* ============================================================================
+ * File Constants
+ * ============================================================================ */
+
+/**
+ * Sentinel value for set_flags to indicate "no change".
+ * Use this instead of magic number -1 for clarity.
+ */
+#define QCONTROL_FILE_FLAGS_UNCHANGED (-1)
+
+/* ============================================================================
  * File Action Types
  * ============================================================================ */
 
@@ -149,6 +159,19 @@ struct qcontrol_file_rw_config {
 struct qcontrol_file_session {
     /** Plugin-defined state (opaque, plugin owns memory) */
     void* state;
+
+    /* === MODIFICATIONS (NULL/sentinel = no change) === */
+
+    /** Replace file path (NULL = no change) */
+    const char* set_path;
+
+    /** Replace open flags (-1 = no change) */
+    int set_flags;
+
+    /** Replace file mode (0 = no change) */
+    unsigned int set_mode;
+
+    /* === I/O TRANSFORM CONFIGS === */
 
     /** Read transform config (NULL if no read transforms) */
     qcontrol_file_rw_config_t* read;

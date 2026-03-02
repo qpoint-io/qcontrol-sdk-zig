@@ -11,8 +11,8 @@
 
 #include "common.h"
 #include "file.h"
-/* Future: #include "net.h" */
-/* Future: #include "exec.h" */
+#include "exec.h"
+#include "net.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,14 +69,22 @@ typedef struct {
     qcontrol_file_write_fn on_file_write;
     qcontrol_file_close_fn on_file_close;
 
-    /* === NETWORK OPERATIONS (future, all optional) === */
-    /* qcontrol_net_connect_fn on_net_connect; */
-    /* qcontrol_net_send_fn on_net_send; */
-    /* qcontrol_net_recv_fn on_net_recv; */
-    /* qcontrol_net_close_fn on_net_close; */
+    /* === EXEC OPERATIONS (all optional, v1 spec - not yet implemented) === */
+    qcontrol_exec_fn on_exec;
+    qcontrol_exec_stdin_fn on_exec_stdin;
+    qcontrol_exec_stdout_fn on_exec_stdout;
+    qcontrol_exec_stderr_fn on_exec_stderr;
+    qcontrol_exec_exit_fn on_exec_exit;
 
-    /* === EXEC OPERATIONS (future, all optional) === */
-    /* qcontrol_exec_fn on_exec; */
+    /* === NETWORK OPERATIONS (all optional, v1 spec - not yet implemented) === */
+    qcontrol_net_connect_fn on_net_connect;
+    qcontrol_net_accept_fn on_net_accept;
+    qcontrol_net_tls_fn on_net_tls;
+    qcontrol_net_domain_fn on_net_domain;
+    qcontrol_net_protocol_fn on_net_protocol;
+    qcontrol_net_send_fn on_net_send;
+    qcontrol_net_recv_fn on_net_recv;
+    qcontrol_net_close_fn on_net_close;
 
 } qcontrol_plugin_t;
 

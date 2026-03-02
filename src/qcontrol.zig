@@ -3,6 +3,12 @@
 //! This module provides idiomatic Zig bindings for the qcontrol plugin SDK.
 //! All C interop is handled internally - plugin authors work with native Zig types.
 //!
+//! ## Modules
+//!
+//! - `file`: File operation types (OpenEvent, ReadEvent, WriteEvent, CloseEvent)
+//! - `exec`: Exec operation types (Event, StdinEvent, StdoutEvent, StderrEvent, ExitEvent)
+//! - `net`: Network operation types (ConnectEvent, AcceptEvent, TlsEvent, SendEvent, RecvEvent, CloseEvent)
+//!
 //! ## Example
 //!
 //! ```zig
@@ -26,12 +32,24 @@
 //!     return .pass;
 //! }
 //!
+//! fn onExec(ev: *qcontrol.exec.Event) qcontrol.exec.ExecResult {
+//!     std.debug.print("exec: {s}\n", .{ev.path()});
+//!     return .pass;
+//! }
+//!
+//! fn onNetConnect(ev: *qcontrol.net.ConnectEvent) qcontrol.net.ConnectResult {
+//!     std.debug.print("connect: {s}:{d}\n", .{ev.dstAddr(), ev.dstPort()});
+//!     return .pass;
+//! }
+//!
 //! comptime {
 //!     qcontrol.exportPlugin(.{
 //!         .name = "my-plugin",
 //!         .on_init = init,
 //!         .on_cleanup = cleanup,
 //!         .on_file_open = onFileOpen,
+//!         .on_exec = onExec,
+//!         .on_net_connect = onNetConnect,
 //!     });
 //! }
 //! ```
@@ -62,6 +80,36 @@ pub const exportPlugin = plugin.exportPlugin;
 /// - Session: Session, RwConfig, Ctx
 /// - Utilities: Buffer, Pattern, patterns()
 pub const file = @import("file/mod.zig");
+
+// ============================================================================
+// Exec Operations
+// ============================================================================
+
+/// Exec operation types and utilities.
+///
+/// Contains:
+/// - Events: Event, StdinEvent, StdoutEvent, StderrEvent, ExitEvent
+/// - Results: ExecResult, Action
+/// - Session: Session, RwConfig, Ctx
+/// - Utilities: Buffer, Pattern, patterns()
+///
+/// Note: v1 spec - not yet implemented in agent
+pub const exec = @import("exec/mod.zig");
+
+// ============================================================================
+// Network Operations
+// ============================================================================
+
+/// Network operation types and utilities.
+///
+/// Contains:
+/// - Events: ConnectEvent, AcceptEvent, TlsEvent, DomainEvent, ProtocolEvent, SendEvent, RecvEvent, CloseEvent
+/// - Results: ConnectResult, AcceptResult, Action, Direction
+/// - Session: Session, RwConfig, Ctx
+/// - Utilities: Buffer, Pattern, patterns()
+///
+/// Note: v1 spec - not yet implemented in agent
+pub const net = @import("net/mod.zig");
 
 // ============================================================================
 // Logging
