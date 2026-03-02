@@ -3,6 +3,7 @@
 # Build all plugins:  make build
 # Build dist artifacts:  make dist
 # Clean:  make clean
+# Dev container:  make dev
 #
 # Each plugin is in its own directory with its own Makefile.
 # Plugins output to their zig-out/ directories:
@@ -10,8 +11,9 @@
 #   - dist:   lib/<name>.o  (object file for bundling)
 
 PLUGINS := file-logger access-control byte-counter content-filter text-transform
+IMAGE_NAME := qcontrol-sdk-zig-demo
 
-.PHONY: all build dist clean
+.PHONY: all build dist clean docker-build dev
 
 all: build
 
@@ -23,3 +25,9 @@ dist:
 
 clean:
 	@for p in $(PLUGINS); do $(MAKE) -C $$p clean; done
+
+docker-build:
+	docker build -t $(IMAGE_NAME) -f Dockerfile ..
+
+dev: docker-build
+	docker run --rm -it $(IMAGE_NAME)

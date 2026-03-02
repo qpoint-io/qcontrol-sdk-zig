@@ -1,0 +1,37 @@
+
+  =============================================
+   qcontrol SDK for Zig - Demo Environment
+  =============================================
+
+  Build a plugin:
+
+    cd examples/file-logger
+    make build                    # builds .so (shared library)
+    make dist                     # builds .o  (object file for bundling)
+
+  Build all example plugins:
+
+    cd examples
+    make build
+
+  Bundle plugins into a single library:
+
+    cd examples
+    qcontrol bundle -c bundle.toml
+
+  Run a command with qcontrol instrumentation:
+
+    qcontrol wrap --bundle <bundle.so> -- <command>
+
+  Example - instrument 'cat' with bundled plugins:
+
+    cd examples
+    qcontrol bundle -c bundle.toml
+    qcontrol wrap --bundle zig-plugins.so -- cat /etc/hostname
+
+  Useful commands:
+
+    qcontrol --help               # full CLI help
+    qcontrol wrap --help          # instrumentation options
+    qcontrol bundle --help        # bundling options
+
