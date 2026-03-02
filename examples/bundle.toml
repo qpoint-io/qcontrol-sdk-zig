@@ -1,0 +1,17 @@
+[bundle]
+output = "zig-plugins.so"
+
+[[plugins]]
+source = "./file-logger"
+
+[[plugins]]
+source = "./access-control"
+
+[[plugins]]
+source = "./byte-counter"
+
+[[plugins]]
+source = "./content-filter"
+
+[[plugins]]
+source = "./text-transform"

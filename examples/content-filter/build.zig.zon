@@ -1,0 +1,18 @@
+.{
+    .name = .content_filter,
+    .version = "0.1.0",
+    .fingerprint = 0x17f22fb1fbcd8847,
+
+    .dependencies = .{
+        .qcontrol = .{
+            .url = "git+https://github.com/qpoint-io/qcontrol-sdk-zig#ae4cbf26355aa791762616bf47483f6c76935473",
+            .hash = "qcontrol-0.1.0-Ip7AGBZsAADvYVszkxZB0cWH9UfZKOKt46g7PuR0DHLv",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

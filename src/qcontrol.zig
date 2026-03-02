@@ -3,23 +3,35 @@
 //! This module provides idiomatic Zig bindings for the qcontrol plugin SDK.
 //! All C interop is handled internally - plugin authors work with native Zig types.
 //!
-//! Types are imported from C SDK headers (sdk/c/include/qcontrol/*.h) using @cImport
-//! to ensure ABI compatibility and maintain a single source of truth.
-//!
 //! ## Example
 //!
 //! ```zig
+//! const std = @import("std");
 //! const qcontrol = @import("qcontrol");
 //!
-//! fn onOpenLeave(ctx: qcontrol.FileOpenContext) qcontrol.FilterResult {
-//!     qcontrol.log.info("open({s}) = {d}", .{ ctx.path(), ctx.result() });
+//! var logger: qcontrol.Logger = .{};
+//!
+//! fn init() void {
+//!     logger.init();
+//! }
+//!
+//! fn cleanup() void {
+//!     logger.deinit();
+//! }
+//!
+//! fn onFileOpen(ev: *qcontrol.file.OpenEvent) qcontrol.file.OpenResult {
+//!     if (std.mem.startsWith(u8, ev.path(), "/tmp/secret")) {
+//!         return .block;
+//!     }
 //!     return .pass;
 //! }
 //!
 //! comptime {
 //!     qcontrol.exportPlugin(.{
-//!         .name = "my_plugin",
-//!         .on_file_open_leave = onOpenLeave,
+//!         .name = "my-plugin",
+//!         .on_init = init,
+//!         .on_cleanup = cleanup,
+//!         .on_file_open = onFileOpen,
 //!     });
 //! }
 //! ```
@@ -27,49 +39,29 @@
 const std = @import("std");
 
 // ============================================================================
-// Core Types
-// ============================================================================
-
-const types = @import("types.zig");
-pub const FilterResult = types.FilterResult;
-pub const Error = types.Error;
-pub const Phase = types.Phase;
-
-// ============================================================================
-// File Operation Contexts
-// ============================================================================
-
-const file = @import("file.zig");
-pub const FileOpenContext = file.FileOpenContext;
-pub const FileReadContext = file.FileReadContext;
-pub const FileWriteContext = file.FileWriteContext;
-pub const FileCloseContext = file.FileCloseContext;
-
-// ============================================================================
 // Plugin Definition
 // ============================================================================
 
 const plugin = @import("plugin.zig");
+
+/// Plugin configuration struct.
 pub const Plugin = plugin.Plugin;
+
+/// Export a plugin with the given configuration.
 pub const exportPlugin = plugin.exportPlugin;
 
-/// Filter callback types (idiomatic Zig signatures).
-pub const FileOpenFilterFn = plugin.FileOpenFilterFn;
-pub const FileReadFilterFn = plugin.FileReadFilterFn;
-pub const FileWriteFilterFn = plugin.FileWriteFilterFn;
-pub const FileCloseFilterFn = plugin.FileCloseFilterFn;
-
 // ============================================================================
-// Manual Registration API
+// File Operations
 // ============================================================================
 
-const register = @import("register.zig");
-pub const FilterHandle = register.FilterHandle;
-pub const registerFileOpen = register.registerFileOpen;
-pub const registerFileRead = register.registerFileRead;
-pub const registerFileWrite = register.registerFileWrite;
-pub const registerFileClose = register.registerFileClose;
-pub const unregister = register.unregister;
+/// File operation types and utilities.
+///
+/// Contains:
+/// - Events: OpenEvent, ReadEvent, WriteEvent, CloseEvent
+/// - Results: OpenResult, Action
+/// - Session: Session, RwConfig, Ctx
+/// - Utilities: Buffer, Pattern, patterns()
+pub const file = @import("file/mod.zig");
 
 // ============================================================================
 // Logging
