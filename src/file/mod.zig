@@ -22,6 +22,8 @@ pub const SessionState = @import("session.zig").SessionState;
 pub const RwConfig = @import("session.zig").RwConfig;
 pub const Ctx = @import("session.zig").Ctx;
 pub const TransformFn = @import("session.zig").TransformFn;
+pub const PrefixFn = @import("session.zig").PrefixFn;
+pub const SuffixFn = @import("session.zig").SuffixFn;
 
 // Buffer type
 pub const Buffer = @import("buffer.zig").Buffer;
