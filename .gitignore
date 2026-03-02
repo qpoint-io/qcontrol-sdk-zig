@@ -3,6 +3,17 @@ zig-out/
 zig-cache/
 .zig-cache/
 
+# Binary artifacts
+*.so
+*.o
+*.a
+*.dylib
+
+# Example build outputs
+/examples/**/dist/
+/examples/**/zig-out/
+/examples/**/.zig-cache/
+
 # IDE
 .vscode/
 .idea/

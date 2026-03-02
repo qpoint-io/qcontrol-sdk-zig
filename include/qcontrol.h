@@ -6,24 +6,24 @@
  *
  * ## Plugin Development
  *
- * Plugins are shared libraries that export a qcontrol_plugin_init() function.
- * This function is called when the plugin is loaded and should register
- * any desired filters.
+ * Plugins are shared libraries that export a qcontrol_plugin descriptor.
+ * The descriptor is a const struct that defines callbacks for file operations.
  *
  * Example plugin:
  * @code
  * #include <qcontrol.h>
  * #include <stdio.h>
  *
- * static qcontrol_status_t on_file_open_leave(qcontrol_file_open_ctx_t* ctx) {
- *     fprintf(stderr, "[log] open(%s) = %d\n", ctx->path, ctx->result);
- *     return QCONTROL_STATUS_CONTINUE;
+ * static qcontrol_file_action_t on_file_open(qcontrol_file_open_event_t* event) {
+ *     fprintf(stderr, "[log] open(%s) = %d\n", event->path, event->result);
+ *     return QCONTROL_FILE_PASS;
  * }
  *
- * int qcontrol_plugin_init(void) {
- *     qcontrol_register_file_open_filter("logger", NULL, on_file_open_leave, NULL);
- *     return 0;
- * }
+ * const qcontrol_plugin_t qcontrol_plugin = {
+ *     .version = QCONTROL_PLUGIN_VERSION,
+ *     .name = "logger",
+ *     .on_file_open = on_file_open,
+ * };
  * @endcode
  *
  * ## Loading Plugins
@@ -34,6 +34,13 @@
  * @code
  * QCONTROL_PLUGINS=./plugin1.so,./plugin2.so qcontrol wrap -- ./target
  * @endcode
+ *
+ * Or bundle plugins into the agent for distribution:
+ *
+ * @code
+ * qcontrol bundle --config bundle.toml -o my-bundle.so
+ * qcontrol wrap --bundle my-bundle.so -- ./target
+ * @endcode
  */
 
 #ifndef QCONTROL_H
@@ -41,35 +48,6 @@
 
 #include "qcontrol/common.h"
 #include "qcontrol/file.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* ============================================================================
- * Plugin Interface
- * ============================================================================ */
-
-/**
- * Plugin initialization function.
- *
- * Every plugin MUST export this function. It is called when the plugin
- * is loaded and should register any filters the plugin provides.
- *
- * @return 0 on success, non-zero on failure
- */
-int qcontrol_plugin_init(void);
-
-/**
- * Plugin cleanup function (optional).
- *
- * If exported, this function is called before the plugin is unloaded.
- * Plugins should unregister filters and free resources here.
- */
-void qcontrol_plugin_cleanup(void);
-
-#ifdef __cplusplus
-}
-#endif
+#include "qcontrol/plugin.h"
 
 #endif /* QCONTROL_H */
