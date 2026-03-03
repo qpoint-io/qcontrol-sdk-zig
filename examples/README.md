@@ -58,8 +58,12 @@ QCONTROL_PLUGINS=./access-control/dist/access-control-$ARCH.so qcontrol wrap -- 
 **What Happens:**
 `cat` will attempt to read the file, but qcontrol will intercept and deny the `open()` syscall at the C ABI boundary.
 ```text
-[access_control] BLOCKED: /tmp/secret_api_key.txt
 cat: /tmp/secret_api_key.txt: Permission denied
+
+# Check the background audit log to see the interception:
+cat /tmp/qcontrol.log
+
+[access_control.zig] BLOCKED: /tmp/secret_api_key.txt
 ```
 
 ### Next Step: Sandboxing Autonomous AI
