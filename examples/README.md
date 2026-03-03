@@ -74,7 +74,7 @@ If you have an Anthropic Console account, you can try sandboxing the AI:
 
 ```bash
 # 1. Authenticate the AI
-claude -p "hello"
+claude auth login
 
 # 2. Command the AI to read the secret file, but wrap it in our policy
 QCONTROL_PLUGINS=./access-control/dist/access-control-$ARCH.so qcontrol wrap -- claude -p "Read /tmp/secret_api_key.txt and summarize its contents."
