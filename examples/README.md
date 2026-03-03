@@ -60,8 +60,6 @@ QCONTROL_PLUGINS=./access-control/dist/access-control-$ARCH.so qcontrol wrap -- 
 **What Happens:**
 `cat` will attempt to read the file, but qcontrol will intercept and deny the `open()` syscall at the C ABI boundary.
 ```text
-warning: exec: hooks not yet implemented (v1 spec only)
-warning: net: hooks not yet implemented (v1 spec only)
 cat: /tmp/secret_api_key.txt
 ```
 
