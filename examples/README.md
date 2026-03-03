@@ -18,7 +18,7 @@ Example plugins demonstrating the qcontrol Zig SDK for file operation filtering.
 
 ```bash
 make                  # Build all plugins into zig-plugins.so
-qcontrol wrap --bundle zig-plugins.so -- ./your-app
+qcontrol wrap --bundle ./zig-plugins.so -- ./your-app
 ```
 
 ## Demo: Zero-Trust Governance
@@ -50,7 +50,7 @@ echo "super_secret_key_123" > /tmp/secret_api_key.txt
 
 Launch the standard `cat` utility, but wrap it in qcontrol's access-control policy:
 ```bash
-qcontrol wrap --bundle zig-plugins.so -- cat /tmp/secret_api_key.txt
+qcontrol wrap --bundle ./zig-plugins.so -- cat /tmp/secret_api_key.txt
 ```
 
 **What Happens:**
@@ -78,7 +78,7 @@ If you have an Anthropic Console account, you can try sandboxing the AI:
 claude auth login
 
 # 2. Command the AI to read the secret file, but wrap it in our policy
-qcontrol wrap --bundle zig-plugins.so -- claude -p "Read /tmp/secret_api_key.txt and summarize its contents."
+qcontrol wrap --bundle ./zig-plugins.so -- claude -p "Read /tmp/secret_api_key.txt and summarize its contents."
 ```
 
 Claude will hit the system-level block, realize it is sandboxed, and gracefully respond: *"I cannot complete this request because I received a permission denied error trying to read the file."*
@@ -87,7 +87,7 @@ Claude will hit the system-level block, realize it is sandboxed, and gracefully 
 
 ```bash
 # Run the test script with plugins
-qcontrol wrap --bundle zig-plugins.so -- ./test-file-ops.sh
+qcontrol wrap --bundle ./zig-plugins.so -- ./test-file-ops.sh
 
 # Check log output
 cat /tmp/qcontrol.log
