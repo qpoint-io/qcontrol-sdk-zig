@@ -45,13 +45,15 @@ make build
 **3. Set up the Demo**
 Let's use the `access-control` plugin to protect a mock API key file.
 ```bash
+# Detect the current platform (e.g. x86_64-linux, aarch64-linux)
+ARCH=$(uname -m)-$(uname -s | tr A-Z a-z)
+
 echo "super_secret_key_123" > /tmp/secret_api_key.txt
 ```
 
 **4. Watch the OS block the read**
 Launch the standard `cat` utility, but wrap it in qcontrol's access-control policy:
 ```bash
-ARCH=$(uname -m)-$(uname -s | tr A-Z a-z)
 QCONTROL_PLUGINS=./access-control/dist/access-control-$ARCH.so qcontrol wrap -- cat /tmp/secret_api_key.txt
 ```
 
@@ -61,10 +63,13 @@ QCONTROL_PLUGINS=./access-control/dist/access-control-$ARCH.so qcontrol wrap -- 
 warning: exec: hooks not yet implemented (v1 spec only)
 warning: net: hooks not yet implemented (v1 spec only)
 cat: /tmp/secret_api_key.txt
+```
 
-# Check the background audit log to see the interception:
+Check the audit log to see the interception:
+```bash
 cat /tmp/qcontrol.log
-
+```
+```text
 [access_control.zig] BLOCKED: /tmp/secret_api_key.txt
 ```
 
