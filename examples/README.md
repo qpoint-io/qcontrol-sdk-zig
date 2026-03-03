@@ -34,7 +34,7 @@ Instead of relying on application logic or API restrictions, qcontrol intercepts
 **1. Start the Dev Environment**
 We have pre-configured a development container with the SDK, compiler toolchain, and Anthropic's Claude Code AI assistant installed.
 ```bash
-cd examples && make dev
+make dev
 ```
 
 **2. Build the Plugins**
