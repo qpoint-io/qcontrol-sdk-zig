@@ -2,6 +2,16 @@
 
 Intercept. Observe. Transform. Build secure sandboxes for AI agents and control any application from the inside.
 
+---
+
+**Overview:** [Introduction](#introduction) · [What Can You Build?](#what-can-you-build) · [Quick Start](#quick-start) · [Core Concepts](#core-concepts) · [Examples](#examples)
+
+**API Reference:** [File Operations](#file-operations) · [Exec Operations](#exec-operations) · [Network Operations](#network-operations)
+
+**Development:** [Building Plugins](#building-plugins) · [Bundling Plugins](#bundling-plugins) · [Environment Variables](#environment-variables)
+
+---
+
 ## Introduction
 
 The Qcontrol Zig SDK lets you build plugins that hook directly into system calls, giving you precise control over how applications interact with files, processes, and the network.
