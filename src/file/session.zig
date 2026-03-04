@@ -114,6 +114,29 @@ pub const SessionState = struct {
         }
         std.heap.c_allocator.destroy(self);
     }
+
+    /// Create a state-only SessionState wrapper.
+    ///
+    /// Used for OpenResult.state so callback wrappers can consistently treat
+    /// incoming pointers as SessionState regardless of whether the plugin
+    /// returned .session or .state.
+    pub fn createStateOnly(user_state: ?*anyopaque) ?*SessionState {
+        const session_state = std.heap.c_allocator.create(SessionState) catch return null;
+        session_state.* = .{
+            .user_state = user_state,
+            .read_transform = null,
+            .write_transform = null,
+            .read_prefix_fn = null,
+            .read_suffix_fn = null,
+            .write_prefix_fn = null,
+            .write_suffix_fn = null,
+            .read_config = null,
+            .write_config = null,
+            .read_patterns = undefined,
+            .write_patterns = undefined,
+        };
+        return session_state;
+    }
 };
 
 /// Trampoline for read transform - extracts transform fn from SessionState
