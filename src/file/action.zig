@@ -54,13 +54,41 @@ pub const OpenResult = union(enum) {
                     };
                 }
             },
-            .state => |s| .{
-                .type = ffi.c.QCONTROL_FILE_ACTION_STATE,
-                .unnamed_0 = .{ .state = s },
+            .state => |s| blk: {
+                // Wrap state for ABI consistency with callback wrappers.
+                // On allocation failure, fall back to PASS.
+                if (session.SessionState.createStateOnly(s)) |wrapped| {
+                    break :blk .{
+                        .type = ffi.c.QCONTROL_FILE_ACTION_STATE,
+                        .unnamed_0 = .{ .state = wrapped },
+                    };
+                } else {
+                    break :blk .{
+                        .type = ffi.c.QCONTROL_FILE_ACTION_PASS,
+                        .unnamed_0 = undefined,
+                    };
+                }
             },
         };
     }
 };
+
+test "OpenResult.state wraps user state in SessionState" {
+    var dummy: u8 = 42;
+    const user_state: ?*anyopaque = @ptrCast(&dummy);
+
+    const action_c = (OpenResult{ .state = user_state }).toC();
+    try std.testing.expectEqual(ffi.c.QCONTROL_FILE_ACTION_STATE, action_c.type);
+    try std.testing.expect(action_c.unnamed_0.state != null);
+
+    const wrapped: *session.SessionState = @ptrCast(@alignCast(action_c.unnamed_0.state.?));
+    defer wrapped.destroy();
+
+    try std.testing.expect(wrapped.user_state != null);
+    try std.testing.expectEqual(@intFromPtr(user_state.?), @intFromPtr(wrapped.user_state.?));
+    try std.testing.expectEqual(@as(?*ffi.c.qcontrol_file_rw_config_t, null), wrapped.read_config);
+    try std.testing.expectEqual(@as(?*ffi.c.qcontrol_file_rw_config_t, null), wrapped.write_config);
+}
 
 // =============================================================================
 // Action - Return type for read/write/transform
