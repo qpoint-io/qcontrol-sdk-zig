@@ -1,15 +1,13 @@
 #!/bin/bash
 #
-# Demo script for the Zig net-logger plugin in proxy-backed wrap mode.
+# Demo script for the Zig net-logger plugin.
 #
 # Run this script inside `qcontrol wrap`, similar to test-file-ops.sh:
 #
-#   cd net-logger && zig build -Doptimize=ReleaseFast
-#   QCONTROL_PLUGINS=./net-logger/zig-out/lib/libnet_logger.so \
-#     qcontrol wrap -- ./test-net-io.sh
+#   qcontrol bundle --plugins ./net-logger -o ./net-logger-demo.so
+#   qcontrol wrap --bundle ./net-logger-demo.so -- ./test-net-io.sh
 #
-#   QCONTROL_PLUGINS=./net-logger/zig-out/lib/libnet_logger.so \
-#     qcontrol wrap -- ./test-net-io.sh https://example.com/
+#   qcontrol wrap --bundle ./net-logger-demo.so -- ./test-net-io.sh https://example.com/
 #
 
 set -euo pipefail

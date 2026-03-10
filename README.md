@@ -58,11 +58,11 @@ comptime {
 }
 ```
 
-Build and run:
+Bundle and run:
 
 ```bash
-zig build -Doptimize=ReleaseFast
-qcontrol wrap --plugins ./zig-out/lib/libhello_plugin.so -- cat /etc/passwd
+qcontrol bundle --plugins . -o hello-plugin-bundle.so
+qcontrol wrap --bundle ./hello-plugin-bundle.so -- cat /etc/passwd
 ```
 
 That's it. Your plugin now intercepts every file open in the wrapped process.
@@ -774,68 +774,46 @@ Output locations:
 - Shared library: `zig-out/lib/libmy_plugin.so`
 - Object file: `zig-out/lib/my_plugin.o`
 
-### Using Plugins
+### Using Bundles
 
-Load plugins dynamically via `QCONTROL_PLUGINS`:
-
-```bash
-# Single plugin
-QCONTROL_PLUGINS=./my_plugin.so qcontrol wrap -- ./target
-
-# Multiple plugins (comma-separated)
-QCONTROL_PLUGINS=./logger.so,./blocker.so qcontrol wrap -- ./target
-```
-
-Or with the `--plugins` flag:
+Bundle plugins directly from plugin directories:
 
 ```bash
-qcontrol wrap --plugins ./my_plugin.so -- ./target
+qcontrol bundle --plugins ./my-plugin -o my-plugin-bundle.so
+qcontrol wrap --bundle ./my-plugin-bundle.so -- ./target
+
+# Multiple plugins
+qcontrol bundle --plugins ./logger,./blocker -o my-plugins.so
+qcontrol wrap --bundle ./my-plugins.so -- ./target
 ```
 
 ## Bundling Plugins
 
 For distribution, bundle plugins with the agent core into a single `.so` file.
 
-### Bundle Configuration
+### Creating a Bundle
 
-Create a `bundle.toml` file:
+Create the bundle directly from plugin directories:
+
+```bash
+qcontrol bundle --plugins ./file-logger,./access-control -o my-bundle.so
+```
+
+You can also pass prebuilt object files, or use a `bundle.toml` file when you want to describe larger bundles declaratively:
 
 ```toml
 [bundle]
 output = "my-plugins.so"
 
 [[plugins]]
-source = "./file-logger"    # Plugin directory (auto-builds)
+source = "./file-logger"
 
 [[plugins]]
 source = "./access-control"
-
-[[plugins]]
-source = "./content-filter"
 ```
-
-### Creating a Bundle
-
-1. Build plugins as object files:
-
-```bash
-# Build all plugins in examples/
-make -C examples dist
-
-# Or build individual plugin
-cd my-plugin && zig build -Doptimize=ReleaseFast
-```
-
-2. Create the bundle:
 
 ```bash
 qcontrol bundle --config bundle.toml
-```
-
-Or manually with object files:
-
-```bash
-qcontrol bundle --plugins plugin1.o,plugin2.o -o my-bundle.so
 ```
 
 ### Using Bundles

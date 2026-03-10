@@ -1,9 +1,9 @@
 //! Net logger plugin - logs all network operations to a file.
 //!
-//! This plugin is useful with qcontrol's proxy-backed wrap mode, where
-//! HTTPS and HTTP traffic are normalized into the network ABI and routed
-//! through these callbacks. Native agent-side net hooks are still under
-//! development, but proxy mode already exercises the same plugin-facing ABI.
+//! This plugin is useful with `qcontrol wrap`, where wrapped HTTP and HTTPS
+//! traffic is normalized into the network ABI and routed through these
+//! callbacks. Native agent-side net hooks are still under development, but the
+//! current implementation already exercises the same plugin-facing ABI.
 //!
 //! Environment variables:
 //!   QCONTROL_LOG_FILE - Path to log file (default: /tmp/qcontrol.log)

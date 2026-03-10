@@ -1,9 +1,9 @@
-//! Net transform plugin - demonstrates modifying plaintext proxy traffic.
+//! Net transform plugin - demonstrates modifying plaintext network traffic.
 //!
-//! This example is intended for proxy-backed `qcontrol wrap` mode.
+//! This example is intended for `qcontrol wrap`.
 //! It rewrites simple text responses by replacing:
 //!   "hello"  -> "hullo"
-//!   "server" -> "proxy!"
+//!   "server" -> "client"
 //!
 //! The transform is deliberately simple and best demonstrated against a local
 //! text-based HTTP server such as `../test-net-transform.sh`.
@@ -28,7 +28,7 @@ fn onNetConnect(ev: *qcontrol.net.ConnectEvent) qcontrol.net.ConnectResult {
         .recv_config = .{
             .replace = qcontrol.net.patterns(&.{
                 .{ "hello", "hullo" },
-                .{ "server", "proxy!" },
+                .{ "server", "client" },
             }),
         },
     } };

@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 #
-# Demo script for the Zig net-transform plugin in proxy-backed wrap mode.
+# Demo script for the Zig net-transform plugin.
 #
 # Run this script inside `qcontrol wrap`:
 #
-#   cd net-transform && zig build -Doptimize=ReleaseFast
-#   QCONTROL_PLUGINS=./net-transform/zig-out/lib/libnet_transform.so \
-#     qcontrol wrap -- ./test-net-transform.sh
+#   qcontrol bundle --plugins ./net-transform -o ./net-transform-demo.so
+#   qcontrol wrap --bundle ./net-transform-demo.so -- ./test-net-transform.sh
 #
 
 set -euo pipefail
