@@ -4,8 +4,6 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // Auto-detect local SDK (for development in monorepo)
-    // Falls back to fetching from build.zig.zon dependency for CI/releases
     const local_sdk_path = b.path("../../build.zig").getPath(b);
     const use_local_sdk = std.fs.cwd().access(local_sdk_path, .{}) != error.FileNotFound;
 
@@ -18,25 +16,20 @@ pub fn build(b: *std.Build) void {
     else
         b.dependency("qcontrol", .{ .target = target, .optimize = optimize }).module("qcontrol");
 
-    // Text transform plugin - shared library
-    const text_transform = b.addLibrary(.{
+    const net_transform = b.addLibrary(.{
         .linkage = .dynamic,
-        .name = "text_transform",
+        .name = "net_transform",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
         }),
     });
-    text_transform.root_module.addImport("qcontrol", qcontrol_mod);
-    if (target.result.os.tag == .macos) {
-        text_transform.linker_allow_shlib_undefined = true;
-    }
-    b.installArtifact(text_transform);
+    net_transform.root_module.addImport("qcontrol", qcontrol_mod);
+    b.installArtifact(net_transform);
 
-    // Text transform plugin - object file for bundling
-    const text_transform_obj = b.addObject(.{
-        .name = "text_transform",
+    const net_transform_obj = b.addObject(.{
+        .name = "net_transform",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
@@ -44,13 +37,16 @@ pub fn build(b: *std.Build) void {
             .pic = true,
         }),
     });
-    text_transform_obj.root_module.addImport("qcontrol", qcontrol_mod);
-    const install_obj = b.addInstallFile(text_transform_obj.getEmittedBin(), "lib/text_transform.o");
+    net_transform_obj.root_module.addImport("qcontrol", qcontrol_mod);
+    const install_obj = b.addInstallFile(net_transform_obj.getEmittedBin(), "lib/net_transform.o");
     b.getInstallStep().dependOn(&install_obj.step);
 }
 
-// Create qcontrol module from local SDK (mirrors sdk/zig/build.zig)
-fn createLocalSdkModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+fn createLocalSdkModule(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) *std.Build.Module {
     const mod = b.createModule(.{
         .root_source_file = b.path("../../src/qcontrol.zig"),
         .target = target,

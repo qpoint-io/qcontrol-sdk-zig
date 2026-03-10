@@ -1,6 +1,6 @@
 # Zig SDK Examples
 
-Example plugins demonstrating the qcontrol Zig SDK for file operation filtering.
+Example plugins demonstrating the qcontrol Zig SDK for file, exec, and network interception.
 
 ## Plugins
 
@@ -12,7 +12,8 @@ Example plugins demonstrating the qcontrol Zig SDK for file operation filtering.
 | content-filter | Redacts sensitive data in `.txt`/`.log` files |
 | text-transform | Transforms text based on file extension |
 | exec-logger | Logs all exec operations (v1 - not yet implemented) |
-| net-logger | Logs all network operations (v1 - not yet implemented) |
+| net-logger | Logs proxy-backed network operations like connect/tls/send/recv/close |
+| net-transform | Rewrites plaintext proxy traffic with declarative recv transforms |
 
 ## Quick Start
 
@@ -21,15 +22,32 @@ make                  # Build all plugins into zig-plugins.so
 qcontrol wrap --bundle ./zig-plugins.so -- ./your-app
 ```
 
+Type-specific shortcuts are also available:
+
+```bash
+make bundle-file      # zig-file-plugins.so
+make bundle-exec      # zig-exec-plugins.so
+make bundle-net       # zig-net-plugins.so
+
+make build-file       # shared libraries for file plugins
+make build-exec       # shared libraries for exec plugins
+make build-net        # shared libraries for net plugins
+```
+
 ## Demo: Zero-Trust Governance
 
 Use qcontrol to build unbreakable system-level guardrails for *any* application—from standard Linux utilities to autonomous AI coding agents.
 
 Instead of relying on application logic or API restrictions, qcontrol intercepts system calls at the OS level to guarantee compliance without modifying the target binary.
 
-**1. Start the Dev Environment**
+**1. Install Qcontrol or Start the Dev Environment**
 
-We have pre-configured a development container with the SDK, compiler toolchain, and Anthropic's Claude Code AI assistant installed.
+Option A: install `qcontrol` directly:
+```bash
+curl -s https://get.qpoint.io/qcontrol/demo | sh
+```
+
+Option B: start the pre-configured development environment with the SDK, compiler toolchain, and Anthropic's Claude Code AI assistant installed:
 ```bash
 make dev
 ```
@@ -92,6 +110,60 @@ qcontrol wrap --bundle ./zig-plugins.so -- ./test-file-ops.sh
 # Check log output
 cat /tmp/qcontrol.log
 ```
+
+### Network Demo
+
+Build the network logger example and make an HTTPS request through `wrap`:
+
+```bash
+cd net-logger && zig build -Doptimize=ReleaseFast
+QCONTROL_PLUGINS=./net-logger/zig-out/lib/libnet_logger.so \
+  qcontrol wrap -- python3 ./test-net-client.py https://example.com/
+
+# Or use the helper script via wrap
+QCONTROL_PLUGINS=./net-logger/zig-out/lib/libnet_logger.so \
+  qcontrol wrap -- ./test-net-io.sh https://example.com/
+```
+
+Then inspect the log:
+
+```bash
+grep net_logger.zig /tmp/qcontrol.log
+```
+
+In proxy-backed wrap mode, you should see entries for `connect`, `domain`, `protocol`, `send`, `recv`, and `close`. HTTPS requests should also emit a `tls` line once the proxy terminates TLS locally.
+
+### Network Transform Demo
+
+Build the transform example and run it against a local HTTP server:
+
+```bash
+cd net-transform && zig build -Doptimize=ReleaseFast
+QCONTROL_PLUGINS=./net-transform/zig-out/lib/libnet_transform.so \
+  qcontrol wrap -- ./test-net-transform.sh
+```
+
+You should see the body rewritten from:
+
+```text
+hello from demo server
+```
+
+to:
+
+```text
+hullo from demo proxy!
+```
+
+You can also run it manually:
+
+```bash
+cd net-transform && zig build -Doptimize=ReleaseFast
+QCONTROL_PLUGINS=./net-transform/zig-out/lib/libnet_transform.so \
+  qcontrol wrap -- curl --silent --show-error --noproxy "" http://127.0.0.1:8000/
+```
+
+This example uses `recv_config.replace` to demonstrate that proxy-mode net plugins can modify plaintext application data before it reaches the client. The demo intentionally uses same-length replacements so plain HTTP `Content-Length` remains valid without protocol-aware header rewriting.
 
 ## Writing Plugins
 

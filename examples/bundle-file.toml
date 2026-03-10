@@ -1,5 +1,5 @@
 [bundle]
-output = "zig-plugins.so"
+output = "zig-file-plugins.so"
 
 [[plugins]]
 source = "./file-logger"
@@ -15,9 +15,3 @@ source = "./content-filter"
 
 [[plugins]]
 source = "./text-transform"
-
-[[plugins]]
-source = "./net-logger"
-
-[[plugins]]
-source = "./net-transform"

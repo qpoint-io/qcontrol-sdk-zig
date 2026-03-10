@@ -1,0 +1,8 @@
+[bundle]
+output = "zig-net-plugins.so"
+
+[[plugins]]
+source = "./net-logger"
+
+[[plugins]]
+source = "./net-transform"
