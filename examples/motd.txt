@@ -14,10 +14,22 @@
     cd examples
     make build
 
+  Build plugins by type:
+
+    make build-file              # file plugin shared libraries
+    make build-exec              # exec plugin shared libraries
+    make build-net               # net plugin shared libraries
+
   Bundle plugins into a single library:
 
     cd examples
     qcontrol bundle -c bundle.toml
+
+  Bundle plugins by type:
+
+    make bundle-file             # zig-file-plugins.so
+    make bundle-exec             # zig-exec-plugins.so
+    make bundle-net              # zig-net-plugins.so
 
   Run a command with qcontrol instrumentation:
 
@@ -34,4 +46,3 @@
     qcontrol --help               # full CLI help
     qcontrol wrap --help          # instrumentation options
     qcontrol bundle --help        # bundling options
-

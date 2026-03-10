@@ -85,9 +85,19 @@ pub const ConnectResult = union(enum) {
                     };
                 }
             },
-            .state => |s| .{
-                .type = ffi.c.QCONTROL_NET_ACTION_STATE,
-                .unnamed_0 = .{ .state = s },
+            .state => |s| {
+                var wrapped = session.Session{ .state = s };
+                if (wrapped.toC()) |c_session| {
+                    return .{
+                        .type = ffi.c.QCONTROL_NET_ACTION_STATE,
+                        .unnamed_0 = .{ .state = c_session.state },
+                    };
+                } else {
+                    return .{
+                        .type = ffi.c.QCONTROL_NET_ACTION_PASS,
+                        .unnamed_0 = undefined,
+                    };
+                }
             },
         };
     }
@@ -138,9 +148,19 @@ pub const AcceptResult = union(enum) {
                     };
                 }
             },
-            .state => |s| .{
-                .type = ffi.c.QCONTROL_NET_ACTION_STATE,
-                .unnamed_0 = .{ .state = s },
+            .state => |s| {
+                var wrapped = session.Session{ .state = s };
+                if (wrapped.toC()) |c_session| {
+                    return .{
+                        .type = ffi.c.QCONTROL_NET_ACTION_STATE,
+                        .unnamed_0 = .{ .state = c_session.state },
+                    };
+                } else {
+                    return .{
+                        .type = ffi.c.QCONTROL_NET_ACTION_PASS,
+                        .unnamed_0 = undefined,
+                    };
+                }
             },
         };
     }

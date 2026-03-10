@@ -1,0 +1,5 @@
+[bundle]
+output = "zig-exec-plugins.so"
+
+[[plugins]]
+source = "./exec-logger"

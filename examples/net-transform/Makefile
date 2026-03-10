@@ -8,7 +8,7 @@ all:
 
 build: all
 	mkdir -p dist
-	cp zig-out/lib/libnet_logger.$(SHLIB_EXT) dist/net-logger-$(ARCH).$(SHLIB_EXT)
+	cp zig-out/lib/libnet_transform.$(SHLIB_EXT) dist/net-transform-$(ARCH).$(SHLIB_EXT)
 
 debug:
 	zig build
@@ -18,5 +18,5 @@ clean:
 
 dist: all
 	mkdir -p dist
-	cp zig-out/lib/libnet_logger.$(SHLIB_EXT) dist/
-	cp zig-out/lib/net_logger.o dist/
+	cp zig-out/lib/libnet_transform.$(SHLIB_EXT) dist/
+	cp zig-out/lib/net_transform.o dist/

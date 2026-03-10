@@ -180,7 +180,7 @@ File operations are fully implemented. Use these to observe, block, or transform
 
 | Callback | Signature | Phase | Purpose |
 |----------|-----------|-------|---------|
-| `on_file_open` | `fn(*OpenEvent) OpenResult` | After open() | Decide interception |
+| `on_file_open` | `fn(*OpenEvent) OpenResult` | After open()/openat() | Decide interception |
 | `on_file_read` | `fn(?*anyopaque, *ReadEvent) Action` | After read() | Observe or block |
 | `on_file_write` | `fn(?*anyopaque, *WriteEvent) Action` | Before write() | Observe or block |
 | `on_file_close` | `fn(?*anyopaque, *CloseEvent) void` | After close() | Cleanup state |

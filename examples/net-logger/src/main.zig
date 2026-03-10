@@ -1,8 +1,9 @@
-//! Net logger plugin - logs all network operations to a file
+//! Net logger plugin - logs all network operations to a file.
 //!
-//! Demonstrates the v1 network API. Note: network hooks are not yet
-//! implemented in the agent, so this plugin will compile but
-//! the callbacks won't be invoked at runtime.
+//! This plugin is useful with qcontrol's proxy-backed wrap mode, where
+//! HTTPS and HTTP traffic are normalized into the network ABI and routed
+//! through these callbacks. Native agent-side net hooks are still under
+//! development, but proxy mode already exercises the same plugin-facing ABI.
 //!
 //! Environment variables:
 //!   QCONTROL_LOG_FILE - Path to log file (default: /tmp/qcontrol.log)
@@ -11,6 +12,7 @@ const std = @import("std");
 const qcontrol = @import("qcontrol");
 
 var logger: qcontrol.Logger = .{};
+var tracked_state: u8 = 0;
 
 fn onNetConnect(ev: *qcontrol.net.ConnectEvent) qcontrol.net.ConnectResult {
     logger.print("[net_logger.zig] connect(fd={d}, dst={s}:{d}) = {d}", .{
@@ -24,7 +26,7 @@ fn onNetConnect(ev: *qcontrol.net.ConnectEvent) qcontrol.net.ConnectResult {
         logger.print("[net_logger.zig]   src={s}:{d}", .{ src, ev.srcPort() });
     }
 
-    return .pass;
+    return .{ .state = &tracked_state };
 }
 
 fn onNetAccept(ev: *qcontrol.net.AcceptEvent) qcontrol.net.AcceptResult {
@@ -35,7 +37,7 @@ fn onNetAccept(ev: *qcontrol.net.AcceptEvent) qcontrol.net.AcceptResult {
         ev.srcPort(),
         ev.result(),
     });
-    return .pass;
+    return .{ .state = &tracked_state };
 }
 
 fn onNetTls(state: ?*anyopaque, ev: *qcontrol.net.TlsEvent) void {

@@ -5,8 +5,9 @@
 # Clean:   make clean
 
 NAME := text-transform
-ARCH := $(shell uname -m)-$(shell uname -s | tr A-Z a-z)
+ARCH := $(shell uname -m | sed 's/^arm64$$/aarch64/')-$(shell uname -s | tr A-Z a-z | sed 's/^darwin$$/macos/')
 DIST := dist
+SHLIB_EXT := $(if $(filter Darwin,$(shell uname -s)),dylib,so)
 
 # Zig library names use underscores
 LIB_NAME := text_transform
@@ -18,7 +19,7 @@ all: build
 build:
 	zig build -Doptimize=ReleaseFast
 	@mkdir -p $(DIST)
-	cp zig-out/lib/lib$(LIB_NAME).so $(DIST)/$(NAME)-$(ARCH).so
+	cp zig-out/lib/lib$(LIB_NAME).$(SHLIB_EXT) $(DIST)/$(NAME)-$(ARCH).$(SHLIB_EXT)
 
 dist:
 	zig build -Doptimize=ReleaseFast
