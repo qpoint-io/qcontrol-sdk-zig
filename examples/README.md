@@ -12,8 +12,8 @@ Example plugins demonstrating the qcontrol Zig SDK for file, exec, and network i
 | content-filter | Redacts sensitive data in `.txt`/`.log` files |
 | text-transform | Transforms text based on file extension |
 | exec-logger | Logs all exec operations (v1 - not yet implemented) |
-| net-logger | Logs proxy-backed network operations like connect/tls/send/recv/close |
-| net-transform | Rewrites plaintext proxy traffic with declarative recv transforms |
+| net-logger | Logs network I/O like connect/tls/send/recv/close |
+| net-transform | Rewrites plaintext network traffic with declarative recv transforms |
 
 ## Quick Start
 
@@ -113,16 +113,11 @@ cat /tmp/qcontrol.log
 
 ### Network Demo
 
-Build the network logger example and make an HTTPS request through `wrap`:
+Bundle the network logger example and make an HTTPS request through `wrap`:
 
 ```bash
-cd net-logger && zig build -Doptimize=ReleaseFast
-QCONTROL_PLUGINS=./net-logger/zig-out/lib/libnet_logger.so \
-  qcontrol wrap -- python3 ./test-net-client.py https://example.com/
-
-# Or use the helper script via wrap
-QCONTROL_PLUGINS=./net-logger/zig-out/lib/libnet_logger.so \
-  qcontrol wrap -- ./test-net-io.sh https://example.com/
+qcontrol bundle --plugins ./net-logger -o ./net-logger-demo.so
+qcontrol wrap --bundle ./net-logger-demo.so -- ./test-net-io.sh https://example.com/
 ```
 
 Then inspect the log:
@@ -131,16 +126,15 @@ Then inspect the log:
 grep net_logger.zig /tmp/qcontrol.log
 ```
 
-In proxy-backed wrap mode, you should see entries for `connect`, `domain`, `protocol`, `send`, `recv`, and `close`. HTTPS requests should also emit a `tls` line once the proxy terminates TLS locally.
+You should see entries for `connect`, `domain`, `protocol`, `send`, `recv`, and `close`. HTTPS requests should also emit a `tls` line once the network layer identifies a local TLS session.
 
 ### Network Transform Demo
 
-Build the transform example and run it against a local HTTP server:
+Bundle the transform example and run it against a local HTTP server:
 
 ```bash
-cd net-transform && zig build -Doptimize=ReleaseFast
-QCONTROL_PLUGINS=./net-transform/zig-out/lib/libnet_transform.so \
-  qcontrol wrap -- ./test-net-transform.sh
+qcontrol bundle --plugins ./net-transform -o ./net-transform-demo.so
+qcontrol wrap --bundle ./net-transform-demo.so -- ./test-net-transform.sh
 ```
 
 You should see the body rewritten from:
@@ -152,18 +146,17 @@ hello from demo server
 to:
 
 ```text
-hullo from demo proxy!
+hullo from demo client
 ```
 
 You can also run it manually:
 
 ```bash
-cd net-transform && zig build -Doptimize=ReleaseFast
-QCONTROL_PLUGINS=./net-transform/zig-out/lib/libnet_transform.so \
-  qcontrol wrap -- curl --silent --show-error --noproxy "" http://127.0.0.1:8000/
+qcontrol bundle --plugins ./net-transform -o ./net-transform-demo.so
+qcontrol wrap --bundle ./net-transform-demo.so -- curl --silent --show-error --noproxy "" http://127.0.0.1:8000/
 ```
 
-This example uses `recv_config.replace` to demonstrate that proxy-mode net plugins can modify plaintext application data before it reaches the client. The demo intentionally uses same-length replacements so plain HTTP `Content-Length` remains valid without protocol-aware header rewriting.
+This example uses `recv_config.replace` to demonstrate that net plugins can modify plaintext application data before it reaches the client. The demo intentionally uses same-length replacements so plain HTTP `Content-Length` remains valid without protocol-aware header rewriting.
 
 ## Writing Plugins
 
@@ -203,18 +196,16 @@ const qcontrol_mod = qcontrol_dep.module("qcontrol");
 my_plugin.root_module.addImport("qcontrol", qcontrol_mod);
 ```
 
-## Advanced: Dynamic Loading
+## Advanced: Bundling Individual Plugins
 
-For development or when you need to load individual plugins without bundling:
+For development, you can bundle just the plugins you want without writing a `bundle.toml` file:
 
 ```bash
-# Build shared libraries
-make build
+# Bundle one plugin
+qcontrol bundle --plugins ./file-logger -o ./file-logger.so
+qcontrol wrap --bundle ./file-logger.so -- ls -la
 
-# Load plugins dynamically
-QCONTROL_PLUGINS=./file-logger/zig-out/lib/libfile-logger.so qcontrol wrap -- ls -la
-
-# Multiple plugins (comma-separated)
-QCONTROL_PLUGINS=./file-logger/zig-out/lib/libfile-logger.so,./access-control/zig-out/lib/libaccess-control.so \
-  qcontrol wrap -- cat /tmp/secret_test.txt
+# Bundle multiple plugins
+qcontrol bundle --plugins ./file-logger,./access-control -o ./file-tools.so
+qcontrol wrap --bundle ./file-tools.so -- cat /tmp/secret_test.txt
 ```
