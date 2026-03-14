@@ -6,7 +6,7 @@ Intercept. Observe. Transform. Build secure sandboxes for AI agents and control 
 
 **Overview:** [Introduction](#introduction) · [What Can You Build?](#what-can-you-build) · [Quick Start](#quick-start) · [Core Concepts](#core-concepts) · [Examples](#examples)
 
-**API Reference:** [File Operations](#file-operations) · [Exec Operations](#exec-operations) · [Network Operations](#network-operations)
+**API Reference:** [File Operations](#file-operations) · [Exec Operations](#exec-operations) · [Network Operations](#network-operations) · [HTTP Operations](#http-operations)
 
 **Development:** [Building Plugins](#building-plugins) · [Bundling Plugins](#bundling-plugins) · [Environment Variables](#environment-variables)
 
@@ -21,6 +21,7 @@ This makes Qcontrol ideal for building **AI agent sandboxes and runtimes**. As a
 - **Intercept file operations** — See every open, read, write, and close. Block access to sensitive paths or transform data as it flows through.
 - **Intercept exec operations** — Monitor process spawning, modify arguments, capture stdin/stdout/stderr.
 - **Intercept network operations** — Watch connections form, inspect send/recv traffic, detect TLS and protocols.
+- **Handle structured HTTP** — Observe normalized requests, responses, headers, decoded body chunks, and exchange lifecycle callbacks.
 
 Your plugins run inside the target process via native function hooking. Observe silently, block operations, or transform data in transit. No application changes required.
 
@@ -78,6 +79,7 @@ Qcontrol intercepts operations at three levels:
 | **File** | open, read, write, close | Fully implemented |
 | **Exec** | spawn, stdin, stdout, stderr, exit | SDK ready, agent coming soon |
 | **Network** | connect, accept, send, recv, close | SDK ready, agent coming soon |
+| **HTTP** | request, body, trailers, response, exchange close | Structured runtime callbacks available through the proxy path |
 
 ### Actions
 
@@ -171,6 +173,8 @@ fn onFileOpen(ev: *qcontrol.file.OpenEvent) qcontrol.file.OpenResult {
 | [text-transform](examples/text-transform/) | Uppercases all file reads | Custom transform functions |
 | [exec-logger](examples/exec-logger/) | Logs process spawns and exits | Exec API |
 | [net-logger](examples/net-logger/) | Logs network connections and traffic | Network API |
+| [http-access-logs](examples/http-access-logs/) | Logs HTTP-family connections by discovered domain | Net state, domain/protocol correlation |
+| [http-structured-logger](examples/http-structured-logger/) | Logs normalized HTTP request/response/body callbacks | HTTP API, exchange state |
 
 ## File Operations
 
@@ -614,6 +618,200 @@ The `Ctx` type in transform functions provides connection metadata:
 | `domain()` | `?[]const u8` | Domain name (if discovered) |
 | `protocol()` | `?[]const u8` | Protocol (if detected) |
 
+## HTTP Operations
+
+Structured HTTP callbacks are layered on top of tracked network connections.
+
+- `on_net_*` remains the raw connection and buffer surface
+- `on_http_*` is the normalized protocol surface
+- a plugin may implement either or both
+
+`on_http_request` can return `.{ .state = ptr }` to attach exchange state. That
+same state is then passed back to later callbacks for the same exchange,
+including response and close.
+
+HTTP callbacks do not receive the plugin's net connection-state pointer
+directly. If you need to correlate HTTP exchanges with connection-level plugin
+state, keep your own registry keyed by `ev.ctx().fd()` and/or fields from
+`ev.ctx().netCtx()`.
+
+HTTP body bytes are read-only structured data. They are runtime-owned and only
+guaranteed to remain valid for the duration of the callback.
+
+### Callbacks
+
+| Callback | Signature | Purpose |
+|----------|-----------|---------|
+| `on_http_request` | `fn(*RequestEvent) Action` | Request start and normalized headers |
+| `on_http_request_body` | `fn(?*anyopaque, *BodyEvent) Action` | Decoded request body chunk |
+| `on_http_request_trailers` | `fn(?*anyopaque, *TrailersEvent) Action` | Complete request trailers block |
+| `on_http_request_done` | `fn(?*anyopaque, *MessageDoneEvent) void` | Request message completion |
+| `on_http_response` | `fn(?*anyopaque, *ResponseEvent) Action` | Response start and normalized headers |
+| `on_http_response_body` | `fn(?*anyopaque, *BodyEvent) Action` | Decoded response body chunk |
+| `on_http_response_trailers` | `fn(?*anyopaque, *TrailersEvent) Action` | Complete response trailers block |
+| `on_http_response_done` | `fn(?*anyopaque, *MessageDoneEvent) void` | Response message completion |
+| `on_http_exchange_close` | `fn(?*anyopaque, *ExchangeCloseEvent) void` | Final cleanup hook for the exchange |
+
+### Common Event Accessors
+
+`RequestEvent`:
+
+- `ctx()` gives access to `fd()`, `exchangeId()`, `streamId()`, `version()`, and `netCtx()`
+- `rawTarget()` preserves the original request-target
+- `method()`, `scheme()`, `authority()`, `path()` expose normalized request fields
+- `headers()` returns a lightweight `HeaderList`
+
+`ResponseEvent`:
+
+- `statusCode()`
+- `reason()`
+- `headers()`
+
+`BodyEvent`:
+
+- `kind()` returns `.request` or `.response`
+- `bytes()` returns the read-only body chunk for this callback
+- `offset()`
+- `transferDecoded()` / `contentDecoded()`
+
+`TrailersEvent`:
+
+- `kind()` returns `.request` or `.response`
+- `headers()` returns a `HeaderList`
+
+`MessageDoneEvent`:
+
+- `kind()` returns `.request` or `.response`
+- `bodyBytes()` returns the total decoded body bytes observed for that message
+
+`ExchangeCloseEvent`:
+
+- `reason()` returns `.complete`, `.aborted`, `.parse_error`, or `.connection_closed`
+- `requestDone()` / `responseDone()`
+
+### HTTP Context
+
+`ctx()` returns `qcontrol.http.Ctx`, which provides:
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `fd()` | `i32` | Underlying socket fd |
+| `exchangeId()` | `u64` | Runtime-assigned exchange id |
+| `streamId()` | `u32` | Native HTTP/2 stream id, or `0` for HTTP/1.x |
+| `version()` | `Version` | `.unknown`, `.http1_0`, `.http1_1`, or `.http2` |
+| `netCtx()` | `qcontrol.net.Ctx` | Underlying network metadata snapshot |
+
+`ctx().netCtx()` exposes the same network context accessors used by raw net
+transforms, including `direction()`, `srcAddr()`, `dstAddr()`, `isTls()`,
+`tlsVersion()`, `domain()`, and `protocol()`.
+
+### Headers
+
+HTTP headers and trailers are exposed through `HeaderList`.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `len()` | `usize` | Number of headers |
+| `isEmpty()` | `bool` | Whether the list is empty |
+| `at(i)` | `?Header` | Header at index |
+| `iterator()` | `HeaderIterator` | Iterate over headers |
+
+`Header` provides:
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `name()` | `[]const u8` | Header name |
+| `value()` | `[]const u8` | Header value |
+
+Example: iterate and print headers
+
+```zig
+fn onHttpRequest(ev: *qcontrol.http.RequestEvent) qcontrol.http.Action {
+    var it = ev.headers().iterator();
+    while (it.next()) |header| {
+        std.debug.print("{s}: {s}\n", .{
+            header.name(),
+            header.value(),
+        });
+    }
+    return .pass;
+}
+```
+
+Example: print body bytes
+
+```zig
+fn onHttpResponseBody(state: ?*anyopaque, ev: *qcontrol.http.BodyEvent) qcontrol.http.Action {
+    _ = state;
+
+    const body = ev.bytes();
+    std.debug.print("offset={d} len={d}\n", .{ ev.offset(), body.len });
+    std.debug.print("{s}\n", .{body});
+
+    return .pass;
+}
+```
+
+If the body may not be UTF-8, prefer printing it as hex:
+
+```zig
+fn onHttpResponseBodyHex(state: ?*anyopaque, ev: *qcontrol.http.BodyEvent) qcontrol.http.Action {
+    _ = state;
+
+    for (ev.bytes()) |byte| {
+        std.debug.print("{x:0>2}", .{byte});
+    }
+    std.debug.print("\n", .{});
+    return .pass;
+}
+```
+
+### Example
+
+```zig
+const std = @import("std");
+const qcontrol = @import("qcontrol");
+
+const ExchangeState = struct {
+    method: []const u8,
+};
+
+fn onHttpRequest(ev: *qcontrol.http.RequestEvent) qcontrol.http.Action {
+    std.debug.print("http {s} {s}\n", .{ ev.method(), ev.rawTarget() });
+
+    const state = std.heap.c_allocator.create(ExchangeState) catch return .pass;
+    state.* = .{ .method = ev.method() };
+    return .{ .state = state };
+}
+
+fn onHttpResponse(state: ?*anyopaque, ev: *qcontrol.http.ResponseEvent) qcontrol.http.Action {
+    const exchange: ?*ExchangeState = if (state) |ptr| @ptrCast(@alignCast(ptr)) else null;
+    std.debug.print("fd={d} method={s} status={d}\n", .{
+        ev.ctx().fd(),
+        if (exchange) |s| s.method else "?",
+        ev.statusCode(),
+    });
+    return .pass;
+}
+
+fn onHttpExchangeClose(state: ?*anyopaque, ev: *qcontrol.http.ExchangeCloseEvent) void {
+    _ = ev;
+    if (state) |ptr| {
+        const exchange: *ExchangeState = @ptrCast(@alignCast(ptr));
+        std.heap.c_allocator.destroy(exchange);
+    }
+}
+
+comptime {
+    qcontrol.exportPlugin(.{
+        .name = "http-observer",
+        .on_http_request = onHttpRequest,
+        .on_http_response = onHttpResponse,
+        .on_http_exchange_close = onHttpExchangeClose,
+    });
+}
+```
+
 ## Building Plugins
 
 ### Project Setup
@@ -754,6 +952,15 @@ comptime {
         .on_net_send = onNetSend,
         .on_net_recv = onNetRecv,
         .on_net_close = onNetClose,
+        .on_http_request = onHttpRequest,          // Optional: structured HTTP callbacks
+        .on_http_request_body = onHttpRequestBody,
+        .on_http_request_trailers = onHttpRequestTrailers,
+        .on_http_request_done = onHttpRequestDone,
+        .on_http_response = onHttpResponse,
+        .on_http_response_body = onHttpResponseBody,
+        .on_http_response_trailers = onHttpResponseTrailers,
+        .on_http_response_done = onHttpResponseDone,
+        .on_http_exchange_close = onHttpExchangeClose,
     });
 }
 ```
