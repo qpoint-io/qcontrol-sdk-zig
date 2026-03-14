@@ -8,6 +8,7 @@ const std = @import("std");
 const ffi = @import("ffi.zig");
 const file = @import("file/mod.zig");
 const exec = @import("exec/mod.zig");
+const http = @import("http/mod.zig");
 const net = @import("net/mod.zig");
 
 /// Plugin configuration struct.
@@ -73,6 +74,29 @@ pub const Plugin = struct {
     on_net_recv: ?net.NetRecvFn = null,
     /// Called when connection is closed.
     on_net_close: ?net.NetCloseFn = null,
+
+    // =========================================================================
+    // HTTP operation callbacks
+    // =========================================================================
+
+    /// Called when a normalized HTTP request starts.
+    on_http_request: ?http.HttpRequestFn = null,
+    /// Called for decoded HTTP request body chunks.
+    on_http_request_body: ?http.HttpRequestBodyFn = null,
+    /// Called when a complete HTTP request trailers block is available.
+    on_http_request_trailers: ?http.HttpRequestTrailersFn = null,
+    /// Called when the HTTP request message completes.
+    on_http_request_done: ?http.HttpRequestDoneFn = null,
+    /// Called when a normalized HTTP response starts.
+    on_http_response: ?http.HttpResponseFn = null,
+    /// Called for decoded HTTP response body chunks.
+    on_http_response_body: ?http.HttpResponseBodyFn = null,
+    /// Called when a complete HTTP response trailers block is available.
+    on_http_response_trailers: ?http.HttpResponseTrailersFn = null,
+    /// Called when the HTTP response message completes.
+    on_http_response_done: ?http.HttpResponseDoneFn = null,
+    /// Called exactly once when the exchange terminates.
+    on_http_exchange_close: ?http.HttpExchangeCloseFn = null,
 };
 
 /// Export a plugin.
@@ -346,6 +370,116 @@ pub fn exportPlugin(comptime p: Plugin) void {
         }
     }.wrapper;
 
+    // =========================================================================
+    // HTTP operation wrappers
+    // =========================================================================
+
+    const http_request_wrapper = if (p.on_http_request) |f| struct {
+        fn wrapper(raw: [*c]ffi.c.qcontrol_http_request_event_t) callconv(.c) ffi.c.qcontrol_http_action_t {
+            var ev = http.RequestEvent{ .raw = @ptrCast(raw) };
+            return f(&ev).toC();
+        }
+    }.wrapper else null;
+
+    const http_request_body_wrapper = if (p.on_http_request_body) |f| struct {
+        fn wrapper(state: ?*anyopaque, raw: [*c]ffi.c.qcontrol_http_body_event_t) callconv(.c) ffi.c.qcontrol_http_action_t {
+            const user_state = if (state) |s|
+                @as(*http.SessionState, @ptrCast(@alignCast(s))).user_state
+            else
+                null;
+            var ev = http.BodyEvent{ .raw = @ptrCast(raw) };
+            return f(user_state, &ev).toC();
+        }
+    }.wrapper else null;
+
+    const http_request_trailers_wrapper = if (p.on_http_request_trailers) |f| struct {
+        fn wrapper(state: ?*anyopaque, raw: [*c]ffi.c.qcontrol_http_trailers_event_t) callconv(.c) ffi.c.qcontrol_http_action_t {
+            const user_state = if (state) |s|
+                @as(*http.SessionState, @ptrCast(@alignCast(s))).user_state
+            else
+                null;
+            var ev = http.TrailersEvent{ .raw = @ptrCast(raw) };
+            return f(user_state, &ev).toC();
+        }
+    }.wrapper else null;
+
+    const http_request_done_wrapper = if (p.on_http_request_done) |f| struct {
+        fn wrapper(state: ?*anyopaque, raw: [*c]ffi.c.qcontrol_http_message_done_event_t) callconv(.c) void {
+            const user_state = if (state) |s|
+                @as(*http.SessionState, @ptrCast(@alignCast(s))).user_state
+            else
+                null;
+            var ev = http.MessageDoneEvent{ .raw = @ptrCast(raw) };
+            f(user_state, &ev);
+        }
+    }.wrapper else null;
+
+    const http_response_wrapper = if (p.on_http_response) |f| struct {
+        fn wrapper(state: ?*anyopaque, raw: [*c]ffi.c.qcontrol_http_response_event_t) callconv(.c) ffi.c.qcontrol_http_action_t {
+            const user_state = if (state) |s|
+                @as(*http.SessionState, @ptrCast(@alignCast(s))).user_state
+            else
+                null;
+            var ev = http.ResponseEvent{ .raw = @ptrCast(raw) };
+            return f(user_state, &ev).toC();
+        }
+    }.wrapper else null;
+
+    const http_response_body_wrapper = if (p.on_http_response_body) |f| struct {
+        fn wrapper(state: ?*anyopaque, raw: [*c]ffi.c.qcontrol_http_body_event_t) callconv(.c) ffi.c.qcontrol_http_action_t {
+            const user_state = if (state) |s|
+                @as(*http.SessionState, @ptrCast(@alignCast(s))).user_state
+            else
+                null;
+            var ev = http.BodyEvent{ .raw = @ptrCast(raw) };
+            return f(user_state, &ev).toC();
+        }
+    }.wrapper else null;
+
+    const http_response_trailers_wrapper = if (p.on_http_response_trailers) |f| struct {
+        fn wrapper(state: ?*anyopaque, raw: [*c]ffi.c.qcontrol_http_trailers_event_t) callconv(.c) ffi.c.qcontrol_http_action_t {
+            const user_state = if (state) |s|
+                @as(*http.SessionState, @ptrCast(@alignCast(s))).user_state
+            else
+                null;
+            var ev = http.TrailersEvent{ .raw = @ptrCast(raw) };
+            return f(user_state, &ev).toC();
+        }
+    }.wrapper else null;
+
+    const http_response_done_wrapper = if (p.on_http_response_done) |f| struct {
+        fn wrapper(state: ?*anyopaque, raw: [*c]ffi.c.qcontrol_http_message_done_event_t) callconv(.c) void {
+            const user_state = if (state) |s|
+                @as(*http.SessionState, @ptrCast(@alignCast(s))).user_state
+            else
+                null;
+            var ev = http.MessageDoneEvent{ .raw = @ptrCast(raw) };
+            f(user_state, &ev);
+        }
+    }.wrapper else null;
+
+    const http_exchange_close_wrapper = if (p.on_http_exchange_close) |f| struct {
+        fn wrapper(state: ?*anyopaque, raw: [*c]ffi.c.qcontrol_http_exchange_close_event_t) callconv(.c) void {
+            if (state) |s| {
+                const session_state: *http.SessionState = @ptrCast(@alignCast(s));
+                var ev = http.ExchangeCloseEvent{ .raw = @ptrCast(raw) };
+                f(session_state.user_state, &ev);
+                session_state.destroy();
+            } else {
+                var ev = http.ExchangeCloseEvent{ .raw = @ptrCast(raw) };
+                f(null, &ev);
+            }
+        }
+    }.wrapper else struct {
+        fn wrapper(state: ?*anyopaque, raw: [*c]ffi.c.qcontrol_http_exchange_close_event_t) callconv(.c) void {
+            _ = raw;
+            if (state) |s| {
+                const session_state: *http.SessionState = @ptrCast(@alignCast(s));
+                session_state.destroy();
+            }
+        }
+    }.wrapper;
+
     // Create the plugin descriptor
     const descriptor = ffi.c.qcontrol_plugin_t{
         .version = ffi.c.QCONTROL_PLUGIN_VERSION,
@@ -372,6 +506,16 @@ pub fn exportPlugin(comptime p: Plugin) void {
         .on_net_send = net_send_wrapper,
         .on_net_recv = net_recv_wrapper,
         .on_net_close = net_close_wrapper,
+        // HTTP operations
+        .on_http_request = http_request_wrapper,
+        .on_http_request_body = http_request_body_wrapper,
+        .on_http_request_trailers = http_request_trailers_wrapper,
+        .on_http_request_done = http_request_done_wrapper,
+        .on_http_response = http_response_wrapper,
+        .on_http_response_body = http_response_body_wrapper,
+        .on_http_response_trailers = http_response_trailers_wrapper,
+        .on_http_response_done = http_response_done_wrapper,
+        .on_http_exchange_close = http_exchange_close_wrapper,
     };
 
     // Export the plugin descriptor

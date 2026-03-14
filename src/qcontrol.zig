@@ -8,6 +8,7 @@
 //! - `file`: File operation types (OpenEvent, ReadEvent, WriteEvent, CloseEvent)
 //! - `exec`: Exec operation types (Event, StdinEvent, StdoutEvent, StderrEvent, ExitEvent)
 //! - `net`: Network operation types (ConnectEvent, AcceptEvent, TlsEvent, SendEvent, RecvEvent, CloseEvent)
+//! - `http`: HTTP exchange types (RequestEvent, ResponseEvent, BodyEvent, ExchangeCloseEvent)
 //!
 //! ## Example
 //!
@@ -42,6 +43,11 @@
 //!     return .pass;
 //! }
 //!
+//! fn onHttpRequest(ev: *qcontrol.http.RequestEvent) qcontrol.http.Action {
+//!     std.debug.print("http {s} {s}\n", .{ ev.method(), ev.rawTarget() });
+//!     return .pass;
+//! }
+//!
 //! comptime {
 //!     qcontrol.exportPlugin(.{
 //!         .name = "my-plugin",
@@ -50,6 +56,7 @@
 //!         .on_file_open = onFileOpen,
 //!         .on_exec = onExec,
 //!         .on_net_connect = onNetConnect,
+//!         .on_http_request = onHttpRequest,
 //!     });
 //! }
 //! ```
@@ -110,6 +117,19 @@ pub const exec = @import("exec/mod.zig");
 ///
 /// Note: v1 spec - not yet implemented in agent
 pub const net = @import("net/mod.zig");
+
+// ============================================================================
+// HTTP Operations
+// ============================================================================
+
+/// HTTP operation types and utilities.
+///
+/// Contains:
+/// - Events: RequestEvent, ResponseEvent, BodyEvent, TrailersEvent,
+///   MessageDoneEvent, ExchangeCloseEvent
+/// - Results: Action, Version, MessageKind, CloseReason
+/// - Context: Ctx
+pub const http = @import("http/mod.zig");
 
 // ============================================================================
 // Logging

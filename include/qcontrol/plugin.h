@@ -13,6 +13,7 @@
 #include "file.h"
 #include "exec.h"
 #include "net.h"
+#include "http.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -85,6 +86,17 @@ typedef struct {
     qcontrol_net_send_fn on_net_send;
     qcontrol_net_recv_fn on_net_recv;
     qcontrol_net_close_fn on_net_close;
+
+    /* === HTTP OPERATIONS (all optional, observation-first) === */
+    qcontrol_http_request_fn on_http_request;
+    qcontrol_http_request_body_fn on_http_request_body;
+    qcontrol_http_request_trailers_fn on_http_request_trailers;
+    qcontrol_http_request_done_fn on_http_request_done;
+    qcontrol_http_response_fn on_http_response;
+    qcontrol_http_response_body_fn on_http_response_body;
+    qcontrol_http_response_trailers_fn on_http_response_trailers;
+    qcontrol_http_response_done_fn on_http_response_done;
+    qcontrol_http_exchange_close_fn on_http_exchange_close;
 
 } qcontrol_plugin_t;
 
