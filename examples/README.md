@@ -14,6 +14,8 @@ Example plugins demonstrating the qcontrol Zig SDK for file, exec, and network i
 | exec-logger | Logs all exec operations (v1 - not yet implemented) |
 | net-logger | Logs network I/O like connect/tls/send/recv/close |
 | net-transform | Rewrites plaintext network traffic with declarative recv transforms |
+| http-access-logs | Logs outbound HTTP connections once domain and protocol are known |
+| http-structured-logger | Logs structured HTTP request/response callbacks from the runtime |
 
 ## Quick Start
 
@@ -157,6 +159,25 @@ qcontrol wrap --bundle ./net-transform-demo.so -- curl --silent --show-error --n
 ```
 
 This example uses `recv_config.replace` to demonstrate that net plugins can modify plaintext application data before it reaches the client. The demo intentionally uses same-length replacements so plain HTTP `Content-Length` remains valid without protocol-aware header rewriting.
+
+### Structured HTTP Demo
+
+Build the structured HTTP logger and run a forced HTTP/1.1 request through
+`wrap`:
+
+```bash
+qcontrol bundle --plugins ./http-structured-logger -o ./http-structured-logger.so
+qcontrol wrap --bundle ./http-structured-logger.so -- curl --silent --show-error --http1.1 --compressed --noproxy "" http://127.0.0.1:8000/
+```
+
+Then inspect the log:
+
+```bash
+grep http_structured_logger.zig /tmp/qcontrol.log
+```
+
+You should see structured `request`, `response`, `response_body`,
+`response_done`, and `exchange_close` lines rather than raw send/recv events.
 
 ## Writing Plugins
 

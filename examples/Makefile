@@ -10,7 +10,7 @@
 
 FILE_PLUGINS := file-logger access-control byte-counter content-filter text-transform
 EXEC_PLUGINS := exec-logger
-NET_PLUGINS := net-logger net-transform
+NET_PLUGINS := net-logger net-transform http-access-logs
 PLUGINS := $(FILE_PLUGINS) $(EXEC_PLUGINS) $(NET_PLUGINS)
 IMAGE_NAME := qcontrol-sdk-zig-demo
 

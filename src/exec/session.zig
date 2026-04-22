@@ -139,6 +139,33 @@ pub const SessionState = struct {
         }
         std.heap.c_allocator.destroy(self);
     }
+
+    /// Create a state-only SessionState wrapper.
+    ///
+    /// This keeps the callback-side state ABI consistent even when a plugin
+    /// returns `.state` instead of a full `.session`.
+    pub fn createStateOnly(user_state: ?*anyopaque) ?*SessionState {
+        const session_state = std.heap.c_allocator.create(SessionState) catch return null;
+        session_state.* = .{
+            .user_state = user_state,
+            .stdin_transform = null,
+            .stdout_transform = null,
+            .stderr_transform = null,
+            .stdin_prefix_fn = null,
+            .stdin_suffix_fn = null,
+            .stdout_prefix_fn = null,
+            .stdout_suffix_fn = null,
+            .stderr_prefix_fn = null,
+            .stderr_suffix_fn = null,
+            .stdin_config = null,
+            .stdout_config = null,
+            .stderr_config = null,
+            .stdin_patterns = undefined,
+            .stdout_patterns = undefined,
+            .stderr_patterns = undefined,
+        };
+        return session_state;
+    }
 };
 
 /// Trampoline for stdin transform - extracts transform fn from SessionState

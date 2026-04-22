@@ -54,9 +54,18 @@ pub const ExecResult = union(enum) {
                     };
                 }
             },
-            .state => |s| .{
-                .type = ffi.c.QCONTROL_EXEC_ACTION_STATE,
-                .unnamed_0 = .{ .state = s },
+            .state => |s| blk: {
+                if (session.SessionState.createStateOnly(s)) |wrapped| {
+                    break :blk .{
+                        .type = ffi.c.QCONTROL_EXEC_ACTION_STATE,
+                        .unnamed_0 = .{ .state = wrapped },
+                    };
+                } else {
+                    break :blk .{
+                        .type = ffi.c.QCONTROL_EXEC_ACTION_PASS,
+                        .unnamed_0 = undefined,
+                    };
+                }
             },
         };
     }
