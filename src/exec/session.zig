@@ -119,6 +119,30 @@ pub const SessionState = struct {
     stdout_config: ?*ffi.c.qcontrol_exec_rw_config_t,
     /// Stderr config (heap-allocated, owned by this struct).
     stderr_config: ?*ffi.c.qcontrol_exec_rw_config_t,
+    /// Owned replacement path string for the exported exec session.
+    set_path: ?[:0]u8,
+    /// Owned replacement working directory string for the exported exec session.
+    set_cwd: ?[:0]u8,
+    /// Owned replacement argv strings for the exported exec session.
+    set_argv_strings: std.ArrayListUnmanaged([:0]u8),
+    /// Null-terminated replacement argv pointer array for the exported exec session.
+    set_argv_ptrs: std.ArrayListUnmanaged(?[*:0]const u8),
+    /// Owned prepended argv strings for the exported exec session.
+    prepend_argv_strings: std.ArrayListUnmanaged([:0]u8),
+    /// Null-terminated prepended argv pointer array for the exported exec session.
+    prepend_argv_ptrs: std.ArrayListUnmanaged(?[*:0]const u8),
+    /// Owned appended argv strings for the exported exec session.
+    append_argv_strings: std.ArrayListUnmanaged([:0]u8),
+    /// Null-terminated appended argv pointer array for the exported exec session.
+    append_argv_ptrs: std.ArrayListUnmanaged(?[*:0]const u8),
+    /// Owned replacement environment strings for the exported exec session.
+    set_env_strings: std.ArrayListUnmanaged([:0]u8),
+    /// Null-terminated replacement environment pointer array for the exported exec session.
+    set_env_ptrs: std.ArrayListUnmanaged(?[*:0]const u8),
+    /// Owned unset-environment key strings for the exported exec session.
+    unset_env_strings: std.ArrayListUnmanaged([:0]u8),
+    /// Null-terminated unset-environment pointer array for the exported exec session.
+    unset_env_ptrs: std.ArrayListUnmanaged(?[*:0]const u8),
     /// Pattern storage for stdin config.
     stdin_patterns: [32]ffi.c.qcontrol_exec_pattern_t,
     /// Pattern storage for stdout config.
@@ -137,6 +161,22 @@ pub const SessionState = struct {
         if (self.stderr_config) |cfg| {
             std.heap.c_allocator.destroy(cfg);
         }
+        if (self.set_path) |path| {
+            std.heap.c_allocator.free(path);
+        }
+        if (self.set_cwd) |cwd| {
+            std.heap.c_allocator.free(cwd);
+        }
+        freeCStringList(&self.set_argv_strings);
+        self.set_argv_ptrs.deinit(std.heap.c_allocator);
+        freeCStringList(&self.prepend_argv_strings);
+        self.prepend_argv_ptrs.deinit(std.heap.c_allocator);
+        freeCStringList(&self.append_argv_strings);
+        self.append_argv_ptrs.deinit(std.heap.c_allocator);
+        freeCStringList(&self.set_env_strings);
+        self.set_env_ptrs.deinit(std.heap.c_allocator);
+        freeCStringList(&self.unset_env_strings);
+        self.unset_env_ptrs.deinit(std.heap.c_allocator);
         std.heap.c_allocator.destroy(self);
     }
 
@@ -160,6 +200,18 @@ pub const SessionState = struct {
             .stdin_config = null,
             .stdout_config = null,
             .stderr_config = null,
+            .set_path = null,
+            .set_cwd = null,
+            .set_argv_strings = .{},
+            .set_argv_ptrs = .{},
+            .prepend_argv_strings = .{},
+            .prepend_argv_ptrs = .{},
+            .append_argv_strings = .{},
+            .append_argv_ptrs = .{},
+            .set_env_strings = .{},
+            .set_env_ptrs = .{},
+            .unset_env_strings = .{},
+            .unset_env_ptrs = .{},
             .stdin_patterns = undefined,
             .stdout_patterns = undefined,
             .stderr_patterns = undefined,
@@ -354,33 +406,33 @@ fn rwConfigToC(
     // Use appropriate trampolines based on stream
     const transform_fn: ?*const fn (?*anyopaque, ?*ffi.c.qcontrol_exec_ctx_t, ?*ffi.c.qcontrol_buffer_t) callconv(.c) ffi.c.qcontrol_exec_action_t =
         if (config.transform != null)
-        switch (stream) {
-            .stdin => &stdinTransformTrampoline,
-            .stdout => &stdoutTransformTrampoline,
-            .stderr => &stderrTransformTrampoline,
-        }
-    else
-        null;
+            switch (stream) {
+                .stdin => &stdinTransformTrampoline,
+                .stdout => &stdoutTransformTrampoline,
+                .stderr => &stderrTransformTrampoline,
+            }
+        else
+            null;
 
     const prefix_fn_ptr: ?*const fn (?*anyopaque, ?*ffi.c.qcontrol_exec_ctx_t, ?*usize) callconv(.c) ?[*]const u8 =
         if (config.prefix_fn != null)
-        switch (stream) {
-            .stdin => &stdinPrefixTrampoline,
-            .stdout => &stdoutPrefixTrampoline,
-            .stderr => &stderrPrefixTrampoline,
-        }
-    else
-        null;
+            switch (stream) {
+                .stdin => &stdinPrefixTrampoline,
+                .stdout => &stdoutPrefixTrampoline,
+                .stderr => &stderrPrefixTrampoline,
+            }
+        else
+            null;
 
     const suffix_fn_ptr: ?*const fn (?*anyopaque, ?*ffi.c.qcontrol_exec_ctx_t, ?*usize) callconv(.c) ?[*]const u8 =
         if (config.suffix_fn != null)
-        switch (stream) {
-            .stdin => &stdinSuffixTrampoline,
-            .stdout => &stdoutSuffixTrampoline,
-            .stderr => &stderrSuffixTrampoline,
-        }
-    else
-        null;
+            switch (stream) {
+                .stdin => &stdinSuffixTrampoline,
+                .stdout => &stdoutSuffixTrampoline,
+                .stderr => &stderrSuffixTrampoline,
+            }
+        else
+            null;
 
     return .{
         .prefix = if (config.prefix) |p| p.ptr else null,
@@ -444,6 +496,7 @@ pub const Session = struct {
 
         // Allocate SessionState wrapper
         const session_state = std.heap.c_allocator.create(SessionState) catch return null;
+        errdefer session_state.destroy();
         session_state.* = .{
             .user_state = self.state,
             .stdin_transform = stdin_transform,
@@ -458,20 +511,40 @@ pub const Session = struct {
             .stdin_config = null,
             .stdout_config = null,
             .stderr_config = null,
+            .set_path = null,
+            .set_cwd = null,
+            .set_argv_strings = .{},
+            .set_argv_ptrs = .{},
+            .prepend_argv_strings = .{},
+            .prepend_argv_ptrs = .{},
+            .append_argv_strings = .{},
+            .append_argv_ptrs = .{},
+            .set_env_strings = .{},
+            .set_env_ptrs = .{},
+            .unset_env_strings = .{},
+            .unset_env_ptrs = .{},
             .stdin_patterns = undefined,
             .stdout_patterns = undefined,
             .stderr_patterns = undefined,
         };
 
+        duplicateOptionalZString(self.set_path, &session_state.set_path) catch return null;
+        duplicateCStringList(self.set_argv, &session_state.set_argv_strings, &session_state.set_argv_ptrs) catch return null;
+        duplicateCStringList(self.prepend_argv, &session_state.prepend_argv_strings, &session_state.prepend_argv_ptrs) catch return null;
+        duplicateCStringList(self.append_argv, &session_state.append_argv_strings, &session_state.append_argv_ptrs) catch return null;
+        duplicateCStringList(self.set_env, &session_state.set_env_strings, &session_state.set_env_ptrs) catch return null;
+        duplicateCStringList(self.unset_env, &session_state.unset_env_strings, &session_state.unset_env_ptrs) catch return null;
+        duplicateOptionalZString(self.set_cwd, &session_state.set_cwd) catch return null;
+
         var result: ffi.c.qcontrol_exec_session_t = .{
             .state = session_state,
-            .set_path = if (self.set_path) |p| p.ptr else null,
-            .set_argv = if (self.set_argv) |_| @ptrCast(self.set_argv.?.ptr) else null,
-            .prepend_argv = if (self.prepend_argv) |_| @ptrCast(self.prepend_argv.?.ptr) else null,
-            .append_argv = if (self.append_argv) |_| @ptrCast(self.append_argv.?.ptr) else null,
-            .set_env = if (self.set_env) |_| @ptrCast(self.set_env.?.ptr) else null,
-            .unset_env = if (self.unset_env) |_| @ptrCast(self.unset_env.?.ptr) else null,
-            .set_cwd = if (self.set_cwd) |c| c.ptr else null,
+            .set_path = if (session_state.set_path) |p| p.ptr else null,
+            .set_argv = if (session_state.set_argv_ptrs.items.len > 0) @ptrCast(session_state.set_argv_ptrs.items.ptr) else null,
+            .prepend_argv = if (session_state.prepend_argv_ptrs.items.len > 0) @ptrCast(session_state.prepend_argv_ptrs.items.ptr) else null,
+            .append_argv = if (session_state.append_argv_ptrs.items.len > 0) @ptrCast(session_state.append_argv_ptrs.items.ptr) else null,
+            .set_env = if (session_state.set_env_ptrs.items.len > 0) @ptrCast(session_state.set_env_ptrs.items.ptr) else null,
+            .unset_env = if (session_state.unset_env_ptrs.items.len > 0) @ptrCast(session_state.unset_env_ptrs.items.ptr) else null,
+            .set_cwd = if (session_state.set_cwd) |c| c.ptr else null,
             .stdin_config = null,
             .stdout_config = null,
             .stderr_config = null,
@@ -513,3 +586,87 @@ pub const Session = struct {
         return result;
     }
 };
+
+/// Duplicate one optional nul-terminated string into session-owned storage.
+fn duplicateOptionalZString(
+    value: ?[:0]const u8,
+    target: *?[:0]u8,
+) !void {
+    if (value) |slice| {
+        target.* = try std.heap.c_allocator.dupeZ(u8, slice);
+    }
+}
+
+/// Duplicate one Zig string slice list into a null-terminated C pointer array
+/// backed by session-owned storage.
+fn duplicateCStringList(
+    values: ?[]const [:0]const u8,
+    strings: *std.ArrayListUnmanaged([:0]u8),
+    ptrs: *std.ArrayListUnmanaged(?[*:0]const u8),
+) !void {
+    const list = values orelse return;
+
+    try strings.ensureTotalCapacity(std.heap.c_allocator, list.len);
+    try ptrs.ensureTotalCapacity(std.heap.c_allocator, list.len + 1);
+
+    for (list) |entry| {
+        const duplicate = try std.heap.c_allocator.dupeZ(u8, entry);
+        strings.appendAssumeCapacity(duplicate);
+        ptrs.appendAssumeCapacity(duplicate.ptr);
+    }
+    ptrs.appendAssumeCapacity(null);
+}
+
+/// Free one owned list of nul-terminated strings and reset the list state.
+fn freeCStringList(list: *std.ArrayListUnmanaged([:0]u8)) void {
+    for (list.items) |entry| {
+        std.heap.c_allocator.free(entry);
+    }
+    list.deinit(std.heap.c_allocator);
+}
+
+test "Session.toC duplicates rewrite storage into owned C arrays" {
+    const argv = [_][:0]const u8{
+        "fixture",
+        "arg",
+    };
+    const prepend = [_][:0]const u8{
+        "pre",
+    };
+    const append = [_][:0]const u8{
+        "post",
+    };
+    const env = [_][:0]const u8{
+        "KEY=value",
+    };
+    const unset = [_][:0]const u8{
+        "DROP",
+    };
+    const session = Session{
+        .set_path = "/tmp/fixture",
+        .set_argv = argv[0..],
+        .prepend_argv = prepend[0..],
+        .append_argv = append[0..],
+        .set_env = env[0..],
+        .unset_env = unset[0..],
+        .set_cwd = "/var/tmp",
+    };
+
+    const c_session = session.toC() orelse return error.OutOfMemory;
+    const wrapped: *SessionState = @ptrCast(@alignCast(c_session.state.?));
+    defer wrapped.destroy();
+
+    try std.testing.expect(wrapped.set_path != null);
+    try std.testing.expect(wrapped.set_cwd != null);
+    try std.testing.expect(c_session.set_argv != @as(?[*]const ?[*:0]const u8, @ptrCast(argv[0..].ptr)));
+    try std.testing.expect(c_session.set_env != @as(?[*]const ?[*:0]const u8, @ptrCast(env[0..].ptr)));
+    try std.testing.expectEqual(@as(usize, 3), wrapped.set_argv_ptrs.items.len);
+    try std.testing.expectEqual(@as(usize, 2), wrapped.set_env_ptrs.items.len);
+    try std.testing.expectEqualStrings("fixture", std.mem.span(c_session.set_argv.?[0].?));
+    try std.testing.expectEqualStrings("arg", std.mem.span(c_session.set_argv.?[1].?));
+    try std.testing.expect(c_session.set_argv.?[2] == null);
+    try std.testing.expectEqualStrings("KEY=value", std.mem.span(c_session.set_env.?[0].?));
+    try std.testing.expect(c_session.set_env.?[1] == null);
+    try std.testing.expectEqualStrings("DROP", std.mem.span(c_session.unset_env.?[0].?));
+    try std.testing.expect(c_session.unset_env.?[1] == null);
+}
