@@ -19,12 +19,7 @@ pub const Logger = struct {
     threadlocal var in_logging: bool = false;
 
     pub fn init(self: *Logger) void {
-        const path = self.getLogPath();
-        self.fd = std.posix.open(
-            path,
-            .{ .ACCMODE = .WRONLY, .CREAT = true, .APPEND = true },
-            0o644,
-        ) catch -1;
+        _ = self;
     }
 
     pub fn deinit(self: *Logger) void {
@@ -40,13 +35,25 @@ pub const Logger = struct {
         in_logging = true;
         defer in_logging = false;
 
-        if (self.fd < 0) return;
         self.mutex.lock();
         defer self.mutex.unlock();
+        self.ensureOpen();
+        if (self.fd < 0) return;
 
         var buf: [1024]u8 = undefined;
         const msg = std.fmt.bufPrint(&buf, fmt ++ "\n", args) catch return;
         _ = std.posix.write(self.fd, msg) catch {};
+    }
+
+    fn ensureOpen(self: *Logger) void {
+        if (self.fd >= 0) return;
+
+        const path = self.getLogPath();
+        self.fd = std.posix.open(
+            path,
+            .{ .ACCMODE = .WRONLY, .CREAT = true, .APPEND = true },
+            0o644,
+        ) catch -1;
     }
 
     fn getLogPath(self: *const Logger) [:0]const u8 {

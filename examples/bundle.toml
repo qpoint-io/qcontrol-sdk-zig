@@ -21,3 +21,6 @@ source = "./net-logger"
 
 [[plugins]]
 source = "./net-transform"
+
+[[plugins]]
+source = "./http-access-logs"
