@@ -1,25 +1,28 @@
 //! HTTP event wrappers around the C ABI.
 
+const std = @import("std");
 const ffi = @import("../ffi.zig");
 const action = @import("action.zig");
 const session = @import("session.zig");
+const file = @import("../file/mod.zig");
+
+fn bytesFromPtrLen(ptr: ?[*]const u8, len: usize) []const u8 {
+    if (ptr) |p| {
+        if (len > 0) return p[0..len];
+    }
+    return "";
+}
 
 /// Single HTTP header view.
 pub const Header = struct {
     raw: *const ffi.c.qcontrol_http_header_t,
 
     pub fn name(self: *const Header) []const u8 {
-        if (self.raw.name) |ptr| {
-            return ptr[0..self.raw.name_len];
-        }
-        return "";
+        return bytesFromPtrLen(@ptrCast(self.raw.name), self.raw.name_len);
     }
 
     pub fn value(self: *const Header) []const u8 {
-        if (self.raw.value) |ptr| {
-            return ptr[0..self.raw.value_len];
-        }
-        return "";
+        return bytesFromPtrLen(@ptrCast(self.raw.value), self.raw.value_len);
     }
 };
 
@@ -57,6 +60,128 @@ pub const HeaderIterator = struct {
     }
 };
 
+/// Mutable header block backed by the host/runtime.
+pub const HeaderBlock = struct {
+    raw: *ffi.c.qcontrol_http_headers_t,
+
+    pub fn len(self: *const HeaderBlock) usize {
+        return ffi.c.qcontrol_http_headers_count(self.raw);
+    }
+
+    pub fn isEmpty(self: *const HeaderBlock) bool {
+        return self.len() == 0;
+    }
+
+    pub fn list(self: *const HeaderBlock) HeaderList {
+        return .{
+            .raw = ffi.c.qcontrol_http_headers_data(self.raw),
+            .count = ffi.c.qcontrol_http_headers_count(self.raw),
+        };
+    }
+
+    pub fn get(self: *const HeaderBlock, name: []const u8) ?[]const u8 {
+        var iter = self.list().iterator();
+        while (iter.next()) |header| {
+            if (std.ascii.eqlIgnoreCase(header.name(), name)) {
+                return header.value();
+            }
+        }
+        return null;
+    }
+
+    pub fn add(self: *HeaderBlock, name: []const u8, value: []const u8) bool {
+        return ffi.c.qcontrol_http_headers_add(self.raw, name.ptr, name.len, value.ptr, value.len) == 0;
+    }
+
+    pub fn set(self: *HeaderBlock, name: []const u8, value: []const u8) bool {
+        return ffi.c.qcontrol_http_headers_set(self.raw, name.ptr, name.len, value.ptr, value.len) == 0;
+    }
+
+    pub fn remove(self: *HeaderBlock, name: []const u8) usize {
+        return ffi.c.qcontrol_http_headers_remove(self.raw, name.ptr, name.len);
+    }
+};
+
+/// Mutable request head handle supplied by hosts that support head edits.
+pub const RequestHead = struct {
+    raw: *ffi.c.qcontrol_http_request_head_t,
+
+    pub fn rawTarget(self: *const RequestHead) []const u8 {
+        return bytesFromPtrLen(@ptrCast(ffi.c.qcontrol_http_request_raw_target(self.raw)), ffi.c.qcontrol_http_request_raw_target_len(self.raw));
+    }
+
+    pub fn method(self: *const RequestHead) []const u8 {
+        return bytesFromPtrLen(@ptrCast(ffi.c.qcontrol_http_request_method(self.raw)), ffi.c.qcontrol_http_request_method_len(self.raw));
+    }
+
+    pub fn setMethod(self: *RequestHead, value: []const u8) bool {
+        return ffi.c.qcontrol_http_request_set_method(self.raw, value.ptr, value.len) == 0;
+    }
+
+    pub fn scheme(self: *const RequestHead) ?[]const u8 {
+        const value = bytesFromPtrLen(@ptrCast(ffi.c.qcontrol_http_request_scheme(self.raw)), ffi.c.qcontrol_http_request_scheme_len(self.raw));
+        if (value.len == 0) return null;
+        return value;
+    }
+
+    pub fn setScheme(self: *RequestHead, value: []const u8) bool {
+        return ffi.c.qcontrol_http_request_set_scheme(self.raw, value.ptr, value.len) == 0;
+    }
+
+    pub fn authority(self: *const RequestHead) ?[]const u8 {
+        const value = bytesFromPtrLen(@ptrCast(ffi.c.qcontrol_http_request_authority(self.raw)), ffi.c.qcontrol_http_request_authority_len(self.raw));
+        if (value.len == 0) return null;
+        return value;
+    }
+
+    pub fn setAuthority(self: *RequestHead, value: []const u8) bool {
+        return ffi.c.qcontrol_http_request_set_authority(self.raw, value.ptr, value.len) == 0;
+    }
+
+    pub fn path(self: *const RequestHead) []const u8 {
+        return bytesFromPtrLen(@ptrCast(ffi.c.qcontrol_http_request_path(self.raw)), ffi.c.qcontrol_http_request_path_len(self.raw));
+    }
+
+    pub fn setPath(self: *RequestHead, value: []const u8) bool {
+        return ffi.c.qcontrol_http_request_set_path(self.raw, value.ptr, value.len) == 0;
+    }
+
+    pub fn headers(self: *RequestHead) HeaderBlock {
+        // Hosts only surface a mutable request head when they can also surface
+        // the backing header block for that head.
+        return .{ .raw = ffi.c.qcontrol_http_request_headers(self.raw) orelse unreachable };
+    }
+};
+
+/// Mutable response head handle supplied by hosts that support head edits.
+pub const ResponseHead = struct {
+    raw: *ffi.c.qcontrol_http_response_head_t,
+
+    pub fn statusCode(self: *const ResponseHead) u16 {
+        return ffi.c.qcontrol_http_response_status_code(self.raw);
+    }
+
+    pub fn setStatusCode(self: *ResponseHead, status_code: u16) void {
+        ffi.c.qcontrol_http_response_set_status_code(self.raw, status_code);
+    }
+
+    pub fn reason(self: *const ResponseHead) ?[]const u8 {
+        const value = bytesFromPtrLen(@ptrCast(ffi.c.qcontrol_http_response_reason(self.raw)), ffi.c.qcontrol_http_response_reason_len(self.raw));
+        if (value.len == 0) return null;
+        return value;
+    }
+
+    pub fn setReason(self: *ResponseHead, value: []const u8) bool {
+        return ffi.c.qcontrol_http_response_set_reason(self.raw, value.ptr, value.len) == 0;
+    }
+
+    pub fn headers(self: *ResponseHead) HeaderBlock {
+        // Hosts only surface a mutable response head when they can also surface
+        // the backing header block for that head.
+        return .{ .raw = ffi.c.qcontrol_http_response_headers(self.raw) orelse unreachable };
+    }
+};
+
 pub const RequestEvent = struct {
     raw: *ffi.c.qcontrol_http_request_event_t,
 
@@ -65,38 +190,27 @@ pub const RequestEvent = struct {
     }
 
     pub fn rawTarget(self: *const RequestEvent) []const u8 {
-        if (self.raw.raw_target) |ptr| {
-            return ptr[0..self.raw.raw_target_len];
-        }
-        return "";
+        return bytesFromPtrLen(@ptrCast(self.raw.raw_target), self.raw.raw_target_len);
     }
 
     pub fn method(self: *const RequestEvent) []const u8 {
-        if (self.raw.method) |ptr| {
-            return ptr[0..self.raw.method_len];
-        }
-        return "";
+        return bytesFromPtrLen(@ptrCast(self.raw.method), self.raw.method_len);
     }
 
     pub fn scheme(self: *const RequestEvent) ?[]const u8 {
-        if (self.raw.scheme) |ptr| {
-            if (self.raw.scheme_len > 0) return ptr[0..self.raw.scheme_len];
-        }
-        return null;
+        const value = bytesFromPtrLen(@ptrCast(self.raw.scheme), self.raw.scheme_len);
+        if (value.len == 0) return null;
+        return value;
     }
 
     pub fn authority(self: *const RequestEvent) ?[]const u8 {
-        if (self.raw.authority) |ptr| {
-            if (self.raw.authority_len > 0) return ptr[0..self.raw.authority_len];
-        }
-        return null;
+        const value = bytesFromPtrLen(@ptrCast(self.raw.authority), self.raw.authority_len);
+        if (value.len == 0) return null;
+        return value;
     }
 
     pub fn path(self: *const RequestEvent) []const u8 {
-        if (self.raw.path) |ptr| {
-            return ptr[0..self.raw.path_len];
-        }
-        return "";
+        return bytesFromPtrLen(@ptrCast(self.raw.path), self.raw.path_len);
     }
 
     pub fn headers(self: *const RequestEvent) HeaderList {
@@ -104,6 +218,11 @@ pub const RequestEvent = struct {
             .raw = self.raw.headers,
             .count = self.raw.header_count,
         };
+    }
+
+    pub fn head(self: *RequestEvent) ?RequestHead {
+        if (self.raw.head == null) return null;
+        return .{ .raw = self.raw.head.? };
     }
 };
 
@@ -119,10 +238,9 @@ pub const ResponseEvent = struct {
     }
 
     pub fn reason(self: *const ResponseEvent) ?[]const u8 {
-        if (self.raw.reason) |ptr| {
-            if (self.raw.reason_len > 0) return ptr[0..self.raw.reason_len];
-        }
-        return null;
+        const value = bytesFromPtrLen(@ptrCast(self.raw.reason), self.raw.reason_len);
+        if (value.len == 0) return null;
+        return value;
     }
 
     pub fn headers(self: *const ResponseEvent) HeaderList {
@@ -130,6 +248,11 @@ pub const ResponseEvent = struct {
             .raw = self.raw.headers,
             .count = self.raw.header_count,
         };
+    }
+
+    pub fn head(self: *ResponseEvent) ?ResponseHead {
+        if (self.raw.head == null) return null;
+        return .{ .raw = self.raw.head.? };
     }
 };
 
@@ -145,10 +268,12 @@ pub const BodyEvent = struct {
     }
 
     pub fn bytes(self: *const BodyEvent) []const u8 {
-        if (self.raw.bytes) |ptr| {
-            if (self.raw.bytes_len > 0) return ptr[0..self.raw.bytes_len];
-        }
-        return "";
+        return bytesFromPtrLen(@ptrCast(self.raw.bytes), self.raw.bytes_len);
+    }
+
+    pub fn body(self: *BodyEvent) ?file.Buffer {
+        if (self.raw.body == null) return null;
+        return .{ .raw = self.raw.body.? };
     }
 
     pub fn offset(self: *const BodyEvent) u64 {
@@ -165,6 +290,10 @@ pub const BodyEvent = struct {
 
     pub fn contentDecoded(self: *const BodyEvent) bool {
         return (self.raw.flags & ffi.c.QCONTROL_HTTP_BODY_FLAG_CONTENT_DECODED) != 0;
+    }
+
+    pub fn endOfStream(self: *const BodyEvent) bool {
+        return self.raw.end_of_stream != 0;
     }
 };
 
@@ -184,6 +313,11 @@ pub const TrailersEvent = struct {
             .raw = self.raw.headers,
             .count = self.raw.header_count,
         };
+    }
+
+    pub fn headerBlock(self: *TrailersEvent) ?HeaderBlock {
+        if (self.raw.header_block == null) return null;
+        return .{ .raw = self.raw.header_block.? };
     }
 };
 

@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
 /**
- * Plugin interface version.
+ * Plugin descriptor version for the current public plugin ABI.
  */
 #define QCONTROL_PLUGIN_VERSION 1
 

@@ -24,3 +24,6 @@ source = "./net-transform"
 
 [[plugins]]
 source = "./http-access-logs"
+
+[[plugins]]
+source = "./http-structured-logger"

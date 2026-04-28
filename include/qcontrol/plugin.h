@@ -52,7 +52,7 @@ typedef int (*qcontrol_plugin_init_fn)(void);
 typedef void (*qcontrol_plugin_cleanup_fn)(void);
 
 typedef struct {
-    /** Must be QCONTROL_PLUGIN_VERSION */
+    /** Must be QCONTROL_PLUGIN_VERSION. */
     uint32_t version;
 
     /** Plugin name for debugging */
@@ -87,7 +87,7 @@ typedef struct {
     qcontrol_net_recv_fn on_net_recv;
     qcontrol_net_close_fn on_net_close;
 
-    /* === HTTP OPERATIONS (all optional, observation-first) === */
+    /* === HTTP OPERATIONS (all optional) === */
     qcontrol_http_request_fn on_http_request;
     qcontrol_http_request_body_fn on_http_request_body;
     qcontrol_http_request_trailers_fn on_http_request_trailers;
@@ -97,7 +97,6 @@ typedef struct {
     qcontrol_http_response_trailers_fn on_http_response_trailers;
     qcontrol_http_response_done_fn on_http_response_done;
     qcontrol_http_exchange_close_fn on_http_exchange_close;
-
 } qcontrol_plugin_t;
 
 /**
