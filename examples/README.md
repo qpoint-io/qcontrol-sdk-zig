@@ -191,6 +191,10 @@ qcontrol bundle --plugins ./http-rewrite -o ./http-rewrite.so
 qcontrol wrap --bundle ./http-rewrite.so -- curl --silent --show-error --http1.1 --noproxy "" http://127.0.0.1:8000/api/profile
 ```
 
+This example requires a `qcontrol` runtime and bundler that export the inline
+HTTP edit ABI. If your installed `qcontrol` build predates that host support,
+bundling will fail with unresolved `qcontrol_http_*` symbols.
+
 This example demonstrates the mutable Zig HTTP SDK surface:
 
 - request head/header mutation through `ev.head()`

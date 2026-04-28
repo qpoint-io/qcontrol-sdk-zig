@@ -3,6 +3,3 @@ output = "zig-http-plugins.so"
 
 [[plugins]]
 source = "./http-structured-logger"
-
-[[plugins]]
-source = "./http-rewrite"

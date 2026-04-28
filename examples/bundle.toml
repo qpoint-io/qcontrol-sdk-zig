@@ -27,9 +27,3 @@ source = "./http-access-logs"
 
 [[plugins]]
 source = "./http-structured-logger"
-
-[[plugins]]
-source = "./http-rewrite"
-
-[[plugins]]
-source = "./http-access-logs"
