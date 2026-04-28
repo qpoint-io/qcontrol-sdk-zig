@@ -8,13 +8,17 @@
 //! - Utilities: Header, HeaderList
 
 pub const Action = @import("action.zig").Action;
+pub const BodyMode = @import("action.zig").BodyMode;
 pub const Version = @import("action.zig").Version;
 pub const MessageKind = @import("action.zig").MessageKind;
 pub const CloseReason = @import("action.zig").CloseReason;
 
 pub const Header = @import("event.zig").Header;
 pub const HeaderList = @import("event.zig").HeaderList;
+pub const HeaderBlock = @import("event.zig").HeaderBlock;
 pub const HeaderIterator = @import("event.zig").HeaderIterator;
+pub const RequestHead = @import("event.zig").RequestHead;
+pub const ResponseHead = @import("event.zig").ResponseHead;
 pub const RequestEvent = @import("event.zig").RequestEvent;
 pub const ResponseEvent = @import("event.zig").ResponseEvent;
 pub const BodyEvent = @import("event.zig").BodyEvent;

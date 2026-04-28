@@ -21,7 +21,7 @@ This makes Qcontrol ideal for building **AI agent sandboxes and runtimes**. As a
 - **Intercept file operations** — See every open, read, write, and close. Block access to sensitive paths or transform data as it flows through.
 - **Intercept exec operations** — Monitor process spawning, modify arguments, capture stdin/stdout/stderr.
 - **Intercept network operations** — Watch connections form, inspect send/recv traffic, detect TLS and protocols.
-- **Handle structured HTTP** — Observe normalized requests, responses, headers, decoded body chunks, and exchange lifecycle callbacks.
+- **Handle structured HTTP** — Observe normalized requests and responses, and optionally rewrite heads, trailers, and buffered bodies when the host exposes mutable handles.
 
 Your plugins run inside the target process via native function hooking. Observe silently, block operations, or transform data in transit. No application changes required.
 
@@ -79,7 +79,7 @@ Qcontrol intercepts operations at three levels:
 | **File** | open, read, write, close | Fully implemented |
 | **Exec** | spawn, stdin, stdout, stderr, exit | SDK ready, agent coming soon |
 | **Network** | connect, accept, send, recv, close | SDK ready, agent coming soon |
-| **HTTP** | request, body, trailers, response, exchange close | Structured runtime callbacks available through the proxy path |
+| **HTTP** | request, body, trailers, response, exchange close | Structured runtime callbacks with optional host-backed mutation through the proxy path |
 
 ### Actions
 
@@ -175,6 +175,7 @@ fn onFileOpen(ev: *qcontrol.file.OpenEvent) qcontrol.file.OpenResult {
 | [net-logger](examples/net-logger/) | Logs network connections and traffic | Network API |
 | [http-access-logs](examples/http-access-logs/) | Logs HTTP-family connections by discovered domain | Net state, domain/protocol correlation |
 | [http-structured-logger](examples/http-structured-logger/) | Logs normalized HTTP request/response/body callbacks | HTTP API, exchange state |
+| [http-rewrite](examples/http-rewrite/) | Mutates HTTP headers and replaces a buffered JSON response body | Mutable HTTP heads, body scheduling, body replacement |
 
 ## File Operations
 
@@ -626,30 +627,39 @@ Structured HTTP callbacks are layered on top of tracked network connections.
 - `on_http_*` is the normalized protocol surface
 - a plugin may implement either or both
 
+Request, response, body, and trailers callbacks are always safe to use for
+observation. Hosts may also expose mutable request/response heads, trailer
+blocks, and body buffers for inline edits. Treat `head()`, `headerBlock()`, and
+`body()` as optional and check for `null` before mutating.
+
 `on_http_request` can return `.{ .state = ptr }` to attach exchange state. That
 same state is then passed back to later callbacks for the same exchange,
-including response and close.
+including response and close. Request and response head callbacks may also
+request body scheduling with `Action.withBodyMode(.stream)` or
+`Action.withBodyMode(.buffer)`.
 
 HTTP callbacks do not receive the plugin's net connection-state pointer
 directly. If you need to correlate HTTP exchanges with connection-level plugin
 state, keep your own registry keyed by `ev.ctx().fd()` and/or fields from
 `ev.ctx().netCtx()`.
 
-HTTP body bytes are read-only structured data. They are runtime-owned and only
-guaranteed to remain valid for the duration of the callback.
+`BodyEvent.bytes()` is the decoded input view for the current callback. It is
+runtime-owned and only guaranteed to remain valid for the duration of that
+callback. If `BodyEvent.body()` is non-null, the host has also provided a
+mutable output buffer backed by the current message body.
 
 ### Callbacks
 
 | Callback | Signature | Purpose |
 |----------|-----------|---------|
-| `on_http_request` | `fn(*RequestEvent) Action` | Request start and normalized headers |
-| `on_http_request_body` | `fn(?*anyopaque, *BodyEvent) Action` | Decoded request body chunk |
-| `on_http_request_trailers` | `fn(?*anyopaque, *TrailersEvent) Action` | Complete request trailers block |
-| `on_http_request_done` | `fn(?*anyopaque, *MessageDoneEvent) void` | Request message completion |
-| `on_http_response` | `fn(?*anyopaque, *ResponseEvent) Action` | Response start and normalized headers |
-| `on_http_response_body` | `fn(?*anyopaque, *BodyEvent) Action` | Decoded response body chunk |
-| `on_http_response_trailers` | `fn(?*anyopaque, *TrailersEvent) Action` | Complete response trailers block |
-| `on_http_response_done` | `fn(?*anyopaque, *MessageDoneEvent) void` | Response message completion |
+| `on_http_request` | `fn(*RequestEvent) Action` | Request start, normalized headers, optional request-head edits, and request body scheduling |
+| `on_http_request_body` | `fn(?*anyopaque, *BodyEvent) Action` | Decoded request body chunk plus optional mutable body buffer |
+| `on_http_request_trailers` | `fn(?*anyopaque, *TrailersEvent) Action` | Complete request trailers block plus optional mutable trailer block |
+| `on_http_request_done` | `fn(?*anyopaque, *MessageDoneEvent) void` | Request message completion after final body/trailers callback |
+| `on_http_response` | `fn(?*anyopaque, *ResponseEvent) Action` | Response start, normalized headers, optional response-head edits, and response body scheduling |
+| `on_http_response_body` | `fn(?*anyopaque, *BodyEvent) Action` | Decoded response body chunk plus optional mutable body buffer |
+| `on_http_response_trailers` | `fn(?*anyopaque, *TrailersEvent) Action` | Complete response trailers block plus optional mutable trailer block |
+| `on_http_response_done` | `fn(?*anyopaque, *MessageDoneEvent) void` | Response message completion after final body/trailers callback |
 | `on_http_exchange_close` | `fn(?*anyopaque, *ExchangeCloseEvent) void` | Final cleanup hook for the exchange |
 
 ### Common Event Accessors
@@ -660,24 +670,29 @@ guaranteed to remain valid for the duration of the callback.
 - `rawTarget()` preserves the original request-target
 - `method()`, `scheme()`, `authority()`, `path()` expose normalized request fields
 - `headers()` returns a lightweight `HeaderList`
+- `head()` returns `?RequestHead` when the host supports inline request edits
 
 `ResponseEvent`:
 
 - `statusCode()`
 - `reason()`
 - `headers()`
+- `head()` returns `?ResponseHead` when the host supports inline response edits
 
 `BodyEvent`:
 
 - `kind()` returns `.request` or `.response`
 - `bytes()` returns the read-only body chunk for this callback
+- `body()` returns `?qcontrol.file.Buffer` when the host supports body edits
 - `offset()`
 - `transferDecoded()` / `contentDecoded()`
+- `endOfStream()` marks the terminal callback for the current message body
 
 `TrailersEvent`:
 
 - `kind()` returns `.request` or `.response`
 - `headers()` returns a `HeaderList`
+- `headerBlock()` returns `?HeaderBlock` when the host supports trailer edits
 
 `MessageDoneEvent`:
 
@@ -705,6 +720,29 @@ guaranteed to remain valid for the duration of the callback.
 transforms, including `direction()`, `srcAddr()`, `dstAddr()`, `isTls()`,
 `tlsVersion()`, `domain()`, and `protocol()`.
 
+### Body Scheduling
+
+Request and response head callbacks can ask the runtime how to deliver body
+callbacks for that message.
+
+| Value | Meaning |
+|-------|---------|
+| `.default` | Keep the host's default scheduling |
+| `.stream` | Deliver decoded body callbacks incrementally |
+| `.buffer` | Buffer the decoded logical body before body callbacks run |
+
+Use `withBodyMode()` on the returned action:
+
+```zig
+return (qcontrol.http.Action{ .pass = {} }).withBodyMode(.buffer);
+```
+
+If you are also attaching exchange state, the same helper works:
+
+```zig
+return (qcontrol.http.Action{ .state = state }).withBodyMode(.stream);
+```
+
 ### Headers
 
 HTTP headers and trailers are exposed through `HeaderList`.
@@ -723,6 +761,48 @@ HTTP headers and trailers are exposed through `HeaderList`.
 | `name()` | `[]const u8` | Header name |
 | `value()` | `[]const u8` | Header value |
 
+When the host supports mutation, request heads, response heads, and trailer
+events also expose a mutable `HeaderBlock`.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `len()` | `usize` | Number of headers in the current mutable view |
+| `isEmpty()` | `bool` | Whether the block is empty |
+| `list()` | `HeaderList` | Snapshot-style view for iteration |
+| `get(name)` | `?[]const u8` | First matching header value, case-insensitive |
+| `add(name, value)` | `bool` | Append another header value |
+| `set(name, value)` | `bool` | Replace existing values for one header name |
+| `remove(name)` | `usize` | Remove all matching headers |
+
+### Mutable Heads
+
+`RequestHead` is available from `RequestEvent.head()` when the host supports
+request edits.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `rawTarget()` | `[]const u8` | Current raw target |
+| `method()` | `[]const u8` | Current method |
+| `setMethod(value)` | `bool` | Replace method |
+| `scheme()` | `?[]const u8` | Current scheme |
+| `setScheme(value)` | `bool` | Replace scheme |
+| `authority()` | `?[]const u8` | Current authority |
+| `setAuthority(value)` | `bool` | Replace authority |
+| `path()` | `[]const u8` | Current normalized path |
+| `setPath(value)` | `bool` | Replace path |
+| `headers()` | `HeaderBlock` | Mutable request header block |
+
+`ResponseHead` is available from `ResponseEvent.head()` when the host supports
+response edits.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `statusCode()` | `u16` | Current response status |
+| `setStatusCode(status)` | `void` | Replace response status |
+| `reason()` | `?[]const u8` | Current reason phrase |
+| `setReason(value)` | `bool` | Replace reason phrase |
+| `headers()` | `HeaderBlock` | Mutable response header block |
+
 Example: iterate and print headers
 
 ```zig
@@ -734,6 +814,21 @@ fn onHttpRequest(ev: *qcontrol.http.RequestEvent) qcontrol.http.Action {
             header.value(),
         });
     }
+    return .pass;
+}
+```
+
+Example: normalize request headers inline
+
+```zig
+fn onHttpRequest(ev: *qcontrol.http.RequestEvent) qcontrol.http.Action {
+    if (ev.head()) |head_value| {
+        var head = head_value;
+        var headers = head.headers();
+        _ = headers.remove("proxy-connection");
+        _ = headers.set("x-qcontrol", "1");
+    }
+
     return .pass;
 }
 ```
@@ -762,6 +857,35 @@ fn onHttpResponseBodyHex(state: ?*anyopaque, ev: *qcontrol.http.BodyEvent) qcont
         std.debug.print("{x:0>2}", .{byte});
     }
     std.debug.print("\n", .{});
+    return .pass;
+}
+```
+
+Example: replace a buffered response body on the terminal callback
+
+```zig
+fn onHttpResponse(state: ?*anyopaque, ev: *qcontrol.http.ResponseEvent) qcontrol.http.Action {
+    _ = state;
+
+    if (ev.head()) |head_value| {
+        var head = head_value;
+        var headers = head.headers();
+        _ = headers.set("content-type", "application/json");
+    }
+
+    return (qcontrol.http.Action{ .pass = {} }).withBodyMode(.buffer);
+}
+
+fn onHttpResponseBody(state: ?*anyopaque, ev: *qcontrol.http.BodyEvent) qcontrol.http.Action {
+    _ = state;
+
+    if (!ev.endOfStream()) return .pass;
+
+    if (ev.body()) |body_value| {
+        var body = body_value;
+        body.set("{\"rewritten\":true}");
+    }
+
     return .pass;
 }
 ```

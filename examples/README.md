@@ -1,6 +1,6 @@
 # Zig SDK Examples
 
-Example plugins demonstrating the qcontrol Zig SDK for file, exec, and network interception.
+Example plugins demonstrating the qcontrol Zig SDK for file, exec, network, and HTTP interception.
 
 ## Plugins
 
@@ -16,6 +16,7 @@ Example plugins demonstrating the qcontrol Zig SDK for file, exec, and network i
 | net-transform | Rewrites plaintext network traffic with declarative recv transforms |
 | http-access-logs | Logs outbound HTTP connections once domain and protocol are known |
 | http-structured-logger | Logs structured HTTP request/response callbacks from the runtime |
+| http-rewrite | Mutates HTTP headers and replaces a buffered JSON response body |
 
 ## Quick Start
 
@@ -30,10 +31,12 @@ Type-specific shortcuts are also available:
 make bundle-file      # zig-file-plugins.so
 make bundle-exec      # zig-exec-plugins.so
 make bundle-net       # zig-net-plugins.so
+make bundle-http      # zig-http-plugins.so
 
 make build-file       # shared libraries for file plugins
 make build-exec       # shared libraries for exec plugins
 make build-net        # shared libraries for net plugins
+make build-http       # shared libraries for HTTP plugins
 ```
 
 ## Demo: Zero-Trust Governance
@@ -178,6 +181,24 @@ grep http_structured_logger.zig /tmp/qcontrol.log
 
 You should see structured `request`, `response`, `response_body`,
 `response_done`, and `exchange_close` lines rather than raw send/recv events.
+
+### HTTP Rewrite Demo
+
+Build the HTTP rewrite example and run a JSON endpoint through `wrap`:
+
+```bash
+qcontrol bundle --plugins ./http-rewrite -o ./http-rewrite.so
+qcontrol wrap --bundle ./http-rewrite.so -- curl --silent --show-error --http1.1 --noproxy "" http://127.0.0.1:8000/api/profile
+```
+
+This example demonstrates the mutable Zig HTTP SDK surface:
+
+- request head/header mutation through `ev.head()`
+- response head/header mutation through `ev.head()`
+- buffered-body scheduling with `(Action{ .pass = {} }).withBodyMode(.buffer)`
+- terminal body replacement through `ev.body()` on the callback where `ev.endOfStream()` is true
+
+The host owns framing details like `Content-Length` and `Transfer-Encoding`, so the plugin only updates semantic headers such as `content-type`.
 
 ## Writing Plugins
 
